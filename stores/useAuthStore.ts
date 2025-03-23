@@ -18,14 +18,27 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   checkAuth: async () => {
     try {
-      const { data: { user }, error } = await supabase.auth.getUser();
-      if (error) throw error;
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      
+      if (!session) {
+        set({ isAuthenticated: false, isLoading: false, error: null });
+        return;
+      }
+
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      
       set({ isAuthenticated: !!user, isLoading: false, error: null });
     } catch (error) {
+      const errorMessage = error instanceof Error
+        ? `Authentication error: ${error.message}`
+        : 'Failed to check authentication status. Please check your internet connection and try again.';
+      console.error(errorMessage);
       set({ 
         isAuthenticated: false, 
         isLoading: false,
-        error: 'Failed to check authentication status. Please try again.'
+        error: errorMessage
       });
     }
   },

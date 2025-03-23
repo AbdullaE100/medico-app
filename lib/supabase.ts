@@ -10,8 +10,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-// Create Supabase client with retries and timeout
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+// Create Supabase client with retries, timeout and error handling
+const createSupabaseClient = () => {
+  try {
+    return createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
@@ -36,6 +38,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     timeout: 15000, // 15 seconds
   },
 });
+  } catch (error) {
+    console.error('Failed to initialize Supabase client:', error);
+    throw new Error('Failed to initialize Supabase client. Please check your connection.');
+  }
+};
+
+export const supabase = createSupabaseClient();
 
 // Helper to check if user is authenticated
 export const isAuthenticated = async () => {
