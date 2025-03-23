@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Chrome as Home, Users, MessageCircle, MessagesSquare, Bell, User } from 'lucide-react-native';
-import { Platform, View, StyleSheet } from 'react-native';
+import { Platform, View, StyleSheet, ActivityIndicator } from 'react-native';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useFeedStore } from '@/stores/useFeedStore';
 import { useNetworkStore } from '@/stores/useNetworkStore';
@@ -10,45 +10,72 @@ import { useNotificationsStore } from '@/stores/useNotificationsStore';
 import { useEffect, useState, memo } from 'react';
 
 export default function TabLayout() {
-  const { isAuthenticated, checkAuth } = useAuthStore();
+  const { isAuthenticated, checkAuth, isLoading } = useAuthStore();
   const { fetchPosts, fetchTrendingHashtags } = useFeedStore();
   const { fetchDoctors, fetchConnectionRequests } = useNetworkStore();
   const { fetchDiscussions, fetchCategories } = useDiscussionsStore();
   const { fetchChats } = useChatStore();
   const { fetchNotifications, unreadCount } = useNotificationsStore();
+  
+  // Add state to track if initial loading is complete
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // Load data in parallel batches to improve performance
   useEffect(() => {
     if (isAuthenticated) {
+      console.log("User is authenticated, loading data...");
+      
       // First batch - Critical UI data
       Promise.all([
-        fetchChats(),
-        fetchNotifications()
-      ]).catch(console.error);
+        fetchChats().catch(err => console.error("Error fetching chats:", err)),
+        fetchNotifications().catch(err => console.error("Error fetching notifications:", err))
+      ]).catch(err => console.error("Error in first batch:", err));
 
       // Second batch - Feed and network data
       setTimeout(() => {
         Promise.all([
-          fetchPosts(),
-          fetchDoctors()
-        ]).catch(console.error);
+          fetchPosts().catch(err => console.error("Error fetching posts:", err)),
+          fetchDoctors().catch(err => console.error("Error fetching doctors:", err))
+        ]).catch(err => console.error("Error in second batch:", err));
       }, 100);
 
       // Third batch - Additional data
       setTimeout(() => {
         Promise.all([
-          fetchTrendingHashtags(),
-          fetchConnectionRequests(),
-          fetchDiscussions(),
-          fetchCategories()
-        ]).catch(console.error);
+          fetchTrendingHashtags().catch(err => console.error("Error fetching hashtags:", err)),
+          fetchConnectionRequests().catch(err => console.error("Error fetching connection requests:", err)),
+          fetchDiscussions().catch(err => console.error("Error fetching discussions:", err)),
+          fetchCategories().catch(err => console.error("Error fetching categories:", err))
+        ]).catch(err => console.error("Error in third batch:", err))
+        .finally(() => {
+          // Mark initialization as complete
+          setIsInitialized(true);
+        });
       }, 200);
+    } else {
+      console.log("User is not authenticated yet");
+      // Even if not authenticated, mark as initialized after a timeout
+      setTimeout(() => setIsInitialized(true), 500);
     }
   }, [isAuthenticated]);
 
   useEffect(() => {
-    checkAuth();
+    console.log("Checking authentication status...");
+    checkAuth().then(() => {
+      console.log("Auth check complete, isAuthenticated:", isAuthenticated);
+    }).catch(err => {
+      console.error("Error checking auth:", err);
+    });
   }, []);
+
+  // Show loading indicator during initialization
+  if (isLoading || !isInitialized) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
+        <ActivityIndicator size="large" color="#0066CC" />
+      </View>
+    );
+  }
 
   return (
     <Tabs
@@ -62,7 +89,7 @@ export default function TabLayout() {
           paddingBottom: Platform.OS === 'ios' ? 30 : 8,
           paddingTop: 8,
         },
-        headerShown: true,
+        headerShown: false,
         headerStyle: {
           backgroundColor: '#FFFFFF',
         },
@@ -77,14 +104,17 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          // Remove href and use tabBarStyle to hide the tab
-          tabBarStyle: { display: 'none' },
+          // Hide from tab bar but maintain functionality
+          href: null, // Prevents the tab from being accessible via direct URL
+          tabBarButton: () => null, // Remove the button from the tab bar
         }}
       />
       <Tabs.Screen
         name="home"
         options={{
-          title: 'Home',
+          title: '',
+          headerShown: false,
+          tabBarLabel: () => null,
           tabBarIcon: ({ color, size }) => <Home size={size} color={color} />,
         }}
       />
