@@ -56,6 +56,13 @@ interface ChatState {
   fetchChats: () => Promise<void>;
   fetchMessages: (chatId: string) => Promise<void>;
   sendMessage: (content: string) => Promise<void>;
+  sendMediaMessage: (params: { 
+    content: string; 
+    type: 'image' | 'file'; 
+    file_url: string; 
+    file_name: string; 
+    file_type?: string;
+  }) => Promise<void>;
   subscribeToMessages: (chatId: string) => void;
   startChat: (doctorId: string) => Promise<string>;
   createGroupChat: (name: string, memberIds: string[]) => Promise<string>;
@@ -426,20 +433,43 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      console.log('Sending message to chat:', currentChat.id, 'Type:', currentChat.type);
+      console.log('Sending message to chat:', currentChat.id);
+      
+      // Determine if this is a direct chat or group chat
+      const isDirectChat = 'user_id' in currentChat || 'other_user' in currentChat;
+      const isGroupChat = 'name' in currentChat && 'members' in currentChat;
+      
+      console.log('Chat type detection - isDirectChat:', isDirectChat, 'isGroupChat:', isGroupChat);
 
       // Create message with proper target ID
       const message = {
-        chat_id: currentChat.type === 'direct' ? currentChat.id : null,
-        group_id: currentChat.type === 'group' ? currentChat.id : null,
+        chat_id: isDirectChat ? currentChat.id : null,
+        group_id: isGroupChat ? currentChat.id : null,
         sender_id: user.id,
         content,
         type: 'text' as const,
         is_read: false
       };
 
+      // Create an optimistic update with temporary ID and current timestamp
+      const optimisticMessage = {
+        ...message,
+        id: `temp-${Date.now()}`,
+        created_at: new Date().toISOString(),
+        sender: {
+          full_name: user.user_metadata?.full_name || 'You',
+          avatar_url: user.user_metadata?.avatar_url || null
+        }
+      };
+
+      // Apply optimistic update immediately
+      set(state => ({
+        messages: [optimisticMessage, ...state.messages]
+      }));
+
       console.log('Message payload:', message);
 
+      // Send the actual message to the server
       const { data, error } = await supabase
         .from('chat_messages')
         .insert(message)
@@ -454,14 +484,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       if (error) {
         console.error('Error sending message:', error);
+        
+        // Revert optimistic update on error
+        set(state => ({
+          messages: state.messages.filter(msg => msg.id !== optimisticMessage.id),
+          error: handleSupabaseError(error)
+        }));
+        
         throw error;
       }
 
       console.log('Message sent successfully:', data);
 
-      // Optimistic update
+      // Replace the optimistic message with the real one
       set(state => ({
-        messages: [data, ...state.messages]
+        messages: state.messages.map(msg => 
+          msg.id === optimisticMessage.id ? data : msg
+        )
       }));
 
       // Refresh chats to update last message
@@ -472,16 +511,119 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
+  sendMediaMessage: async (params) => {
+    try {
+      const { content, type, file_url, file_name, file_type } = params;
+      const { currentChat } = get();
+      if (!currentChat) throw new Error('No active chat');
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      console.log('Sending media message to chat:', currentChat.id);
+      
+      // Determine if this is a direct chat or group chat
+      const isDirectChat = 'user_id' in currentChat || 'other_user' in currentChat;
+      const isGroupChat = 'name' in currentChat && 'members' in currentChat;
+      
+      console.log('Chat type detection - isDirectChat:', isDirectChat, 'isGroupChat:', isGroupChat);
+
+      // Create message with proper target ID and media info
+      const message = {
+        chat_id: isDirectChat ? currentChat.id : null,
+        group_id: isGroupChat ? currentChat.id : null,
+        sender_id: user.id,
+        content,
+        type,
+        file_url,
+        file_name,
+        file_type,
+        is_read: false
+      };
+
+      // Create an optimistic update with temporary ID and current timestamp
+      const optimisticMessage = {
+        ...message,
+        id: `temp-${Date.now()}`,
+        created_at: new Date().toISOString(),
+        sender: {
+          full_name: user.user_metadata?.full_name || 'You',
+          avatar_url: user.user_metadata?.avatar_url || null
+        }
+      };
+
+      // Apply optimistic update immediately
+      set(state => ({
+        messages: [optimisticMessage, ...state.messages]
+      }));
+
+      console.log('Media message payload:', message);
+
+      // Send the actual message to the server
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .insert(message)
+        .select(`
+          *,
+          sender:profiles(
+            full_name,
+            avatar_url
+          )
+        `)
+        .single();
+
+      if (error) {
+        console.error('Error sending media message:', error);
+        
+        // Revert optimistic update on error
+        set(state => ({
+          messages: state.messages.filter(msg => msg.id !== optimisticMessage.id),
+          error: handleSupabaseError(error)
+        }));
+        
+        throw error;
+      }
+
+      console.log('Media message sent successfully:', data);
+
+      // Replace the optimistic message with the real one
+      set(state => ({
+        messages: state.messages.map(msg => 
+          msg.id === optimisticMessage.id ? data : msg
+        )
+      }));
+
+      // Refresh chats to update last message
+      await get().fetchChats();
+    } catch (error) {
+      console.error('Error in sendMediaMessage:', error);
+      set({ error: handleSupabaseError(error) });
+    }
+  },
+
   subscribeToMessages: (chatId: string) => {
-    const { subscriptions } = get();
+    const { subscriptions, currentChat } = get();
 
     // Clean up existing subscriptions
     subscriptions.forEach(sub => sub.unsubscribe());
 
     console.log('Subscribing to messages for chat:', chatId);
+    
+    // Determine if this is a direct chat or group chat
+    // Wait until currentChat is available
+    let isDirectChat = false;
+    let isGroupChat = false;
+    
+    if (currentChat) {
+      isDirectChat = 'user_id' in currentChat || 'other_user' in currentChat;
+      isGroupChat = 'name' in currentChat && 'members' in currentChat;
+    }
+    
+    console.log('Subscribe type detection - isDirectChat:', isDirectChat, 'isGroupChat:', isGroupChat);
 
-    const subscription = supabase
-      .channel('chat_messages')
+    // Create subscription for direct chat
+    const directChatSubscription = supabase
+      .channel('direct_chat_messages')
       .on(
         'postgres_changes',
         {
@@ -490,9 +632,32 @@ export const useChatStore = create<ChatState>((set, get) => ({
           table: 'chat_messages',
           filter: `chat_id=eq.${chatId}`
         },
-        async (payload) => {
-          console.log('New message received:', payload);
-          const { data: message } = payload;
+        async (payload: any) => {
+          console.log('New direct message received:', payload);
+          // Adjust based on the actual payload structure
+          const message = payload.new || payload.record || payload.data;
+          if (!message) {
+            console.error('Could not extract message from payload:', payload);
+            return;
+          }
+          
+          // Get the current user to check if this is our own message
+          const { data } = await supabase.auth.getUser();
+          const currentUser = data.user;
+          
+          // Skip if this message was sent by the current user (already handled by optimistic update)
+          if (currentUser && message.sender_id === currentUser.id) {
+            console.log('Skipping own message from subscription');
+            return;
+          }
+          
+          // Check if message already exists to prevent duplicates
+          const { messages } = get();
+          const msgExists = messages.some(m => m.id === message.id);
+          if (msgExists) {
+            console.log('Message already exists in state, skipping');
+            return;
+          }
           
           // Fetch sender details
           const { data: sender } = await supabase
@@ -507,8 +672,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           }));
 
           // Mark message as read if we're the recipient
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user && message.sender_id !== user.id) {
+          if (currentUser && message.sender_id !== currentUser.id) {
             await supabase.rpc('mark_messages_as_read', { 
               p_chat_id: message.chat_id,
               p_group_id: message.group_id
@@ -520,8 +684,77 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
       )
       .subscribe();
+      
+    // Create subscription for group chat if needed
+    const groupChatSubscription = isGroupChat ? supabase
+      .channel('group_chat_messages')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `group_id=eq.${chatId}`
+        },
+        async (payload: any) => {
+          console.log('New group message received:', payload);
+          // Adjust based on the actual payload structure
+          const message = payload.new || payload.record || payload.data;
+          if (!message) {
+            console.error('Could not extract message from payload:', payload);
+            return;
+          }
+          
+          // Get the current user to check if this is our own message
+          const { data } = await supabase.auth.getUser();
+          const currentUser = data.user;
+          
+          // Skip if this message was sent by the current user (already handled by optimistic update)
+          if (currentUser && message.sender_id === currentUser.id) {
+            console.log('Skipping own message from subscription');
+            return;
+          }
+          
+          // Check if message already exists to prevent duplicates
+          const { messages } = get();
+          const msgExists = messages.some(m => m.id === message.id);
+          if (msgExists) {
+            console.log('Message already exists in state, skipping');
+            return;
+          }
+          
+          // Fetch sender details
+          const { data: sender } = await supabase
+            .from('profiles')
+            .select('full_name, avatar_url')
+            .eq('id', message.sender_id)
+            .single();
 
-    set({ subscriptions: [{ unsubscribe: () => subscription.unsubscribe() }] });
+          // Add new message to state
+          set(state => ({
+            messages: [{ ...message, sender }, ...state.messages]
+          }));
+
+          // Mark message as read if we're the recipient
+          if (currentUser && message.sender_id !== currentUser.id) {
+            await supabase.rpc('mark_messages_as_read', { 
+              p_chat_id: message.chat_id,
+              p_group_id: message.group_id
+            });
+          }
+
+          // Refresh chats to update last message and unread count
+          await get().fetchChats();
+        }
+      )
+      .subscribe() : null;
+
+    set({ 
+      subscriptions: [
+        { unsubscribe: () => directChatSubscription.unsubscribe() },
+        ...(groupChatSubscription ? [{ unsubscribe: () => groupChatSubscription.unsubscribe() }] : [])
+      ] 
+    });
   },
 
   cleanup: () => {

@@ -24,12 +24,18 @@ export interface Post {
   has_reposted?: boolean;
 }
 
-interface Comment {
+export interface Comment {
   id: string;
   post_id: string;
   author_id: string;
   content: string;
   created_at: string;
+  parent_id?: string | null;
+  likes_count?: number;
+  reposts_count?: number;
+  replies_count?: number;
+  has_liked?: boolean;
+  has_reposted?: boolean;
   author?: {
     full_name: string;
     avatar_url: string;
@@ -42,33 +48,67 @@ interface Hashtag {
   post_count: number;
 }
 
+export interface FeedStore extends FeedState {
+  // All existing methods plus new ones
+  loadMorePosts: () => Promise<void>;
+  refreshPosts: () => Promise<void>;
+}
+
 interface FeedState {
   posts: Post[];
   trendingHashtags: Hashtag[];
   isLoading: boolean;
+  isLoadingMore: boolean;
+  hasMorePosts: boolean;
+  currentPage: number;
   error: string | null;
+  lastFetched: number | null;
   fetchPosts: (options?: {
     userId?: string;
     hashtag?: string;
     following?: boolean;
+    forceRefresh?: boolean;
   }) => Promise<void>;
   createPost: (content: string, hashtags?: string[], mediaUrls?: string[]) => Promise<void>;
   likePost: (postId: string) => Promise<void>;
   repostPost: (postId: string, content?: string) => Promise<void>;
   fetchTrendingHashtags: () => Promise<void>;
   fetchComments: (postId: string) => Promise<Comment[]>;
-  createComment: (postId: string, content: string) => Promise<void>;
+  createComment: (postId: string, content: string, parentId?: string) => Promise<void>;
+  likeComment: (commentId: string) => Promise<void>;
+  repostComment: (commentId: string, content?: string) => Promise<void>;
 }
 
-export const useFeedStore = create<FeedState>((set, get) => ({
+// Number of posts to fetch per page
+const POSTS_PER_PAGE = 5;
+// Cache time in milliseconds (5 minutes)
+const CACHE_DURATION = 5 * 60 * 1000;
+
+export const useFeedStore = create<FeedStore>((set, get) => ({
   posts: [],
   trendingHashtags: [],
   isLoading: false,
+  isLoadingMore: false,
+  hasMorePosts: true,
+  currentPage: 0,
+  lastFetched: null,
   error: null,
 
   fetchPosts: async (options = {}) => {
+    const currentState = get();
+    const now = Date.now();
+    const cacheExpired = !currentState.lastFetched || (now - currentState.lastFetched > CACHE_DURATION);
+    
+    // Return cached data if available and not forcing refresh
+    if (currentState.posts.length > 0 && !cacheExpired && !options.forceRefresh) {
+      return;
+    }
+    
     set({ isLoading: true, error: null });
     try {
+      const pageSize = POSTS_PER_PAGE;
+      const currentPage = 0; // Reset to first page when fetching new posts
+      
       let query = supabase
         .from('posts')
         .select(`
@@ -80,7 +120,8 @@ export const useFeedStore = create<FeedState>((set, get) => ({
             hospital
           )
         `)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(0, pageSize - 1);
 
       if (options.userId) {
         query = query.eq('author_id', options.userId);
@@ -132,12 +173,85 @@ export const useFeedStore = create<FeedState>((set, get) => ({
         });
       }
 
-      set({ posts: posts || [] });
+      set({ 
+        posts: posts || [],
+        currentPage,
+        hasMorePosts: posts && posts.length === pageSize,
+        lastFetched: Date.now()
+      });
     } catch (error) {
       set({ error: (error as Error).message });
     } finally {
       set({ isLoading: false });
     }
+  },
+  
+  loadMorePosts: async () => {
+    const { currentPage, posts, isLoadingMore, hasMorePosts } = get();
+    
+    if (isLoadingMore || !hasMorePosts) return;
+    
+    set({ isLoadingMore: true });
+    try {
+      const nextPage = currentPage + 1;
+      const from = nextPage * POSTS_PER_PAGE;
+      const to = from + POSTS_PER_PAGE - 1;
+      
+      const { data: newPosts, error } = await supabase
+        .from('posts')
+        .select(`
+          *,
+          author:profiles!posts_author_id_fkey(
+            full_name,
+            avatar_url,
+            specialty,
+            hospital
+          )
+        `)
+        .order('created_at', { ascending: false })
+        .range(from, to);
+        
+      if (error) throw error;
+      
+      // Fetch user's likes and reposts for new posts
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && newPosts && newPosts.length > 0) {
+        const [{ data: likes }, { data: reposts }] = await Promise.all([
+          supabase
+            .from('post_likes')
+            .select('post_id')
+            .eq('user_id', user.id)
+            .in('post_id', newPosts.map(p => p.id)),
+          supabase
+            .from('post_reposts')
+            .select('post_id')
+            .eq('user_id', user.id)
+            .in('post_id', newPosts.map(p => p.id))
+        ]);
+
+        const likedPosts = new Set(likes?.map(l => l.post_id));
+        const repostedPosts = new Set(reposts?.map(r => r.post_id));
+
+        newPosts.forEach(post => {
+          post.has_liked = likedPosts.has(post.id);
+          post.has_reposted = repostedPosts.has(post.id);
+        });
+      }
+      
+      set({
+        posts: [...posts, ...(newPosts || [])],
+        currentPage: nextPage,
+        hasMorePosts: newPosts && newPosts.length === POSTS_PER_PAGE
+      });
+    } catch (error) {
+      set({ error: (error as Error).message });
+    } finally {
+      set({ isLoadingMore: false });
+    }
+  },
+  
+  refreshPosts: async () => {
+    return get().fetchPosts({ forceRefresh: true });
   },
 
   createPost: async (content, hashtags = [], mediaUrls = []) => {
@@ -247,27 +361,90 @@ export const useFeedStore = create<FeedState>((set, get) => ({
         .order('created_at', { ascending: true });
 
       if (error) throw error;
-      return data || [];
+      
+      const comments: Comment[] = data || [];
+      
+      // Set default values for fields that might not exist in the database yet
+      comments.forEach(comment => {
+        comment.likes_count = comment.likes_count || 0;
+        comment.reposts_count = comment.reposts_count || 0;
+        comment.replies_count = comment.replies_count || 0;
+        comment.parent_id = comment.parent_id || null;
+      });
+      
+      // Fetch user's likes for comments if authenticated
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && comments.length > 0) {
+        // Try to get like/repost info if the tables exist
+        try {
+          const [{ data: likes }, { data: reposts }] = await Promise.all([
+            supabase
+              .from('comment_likes')
+              .select('comment_id')
+              .eq('user_id', user.id)
+              .in('comment_id', comments.map(c => c.id)),
+            supabase
+              .from('comment_reposts')
+              .select('comment_id')
+              .eq('user_id', user.id)
+              .in('comment_id', comments.map(c => c.id))
+          ]);
+
+          const likedComments = new Set(likes?.map(l => l.comment_id) || []);
+          const repostedComments = new Set(reposts?.map(r => r.comment_id) || []);
+
+          comments.forEach(comment => {
+            comment.has_liked = likedComments.has(comment.id);
+            comment.has_reposted = repostedComments.has(comment.id);
+          });
+        } catch (e) {
+          console.warn('Comment interaction tables not available yet:', e);
+        }
+      }
+      
+      return comments;
     } catch (error) {
       set({ error: (error as Error).message });
       return [];
     }
   },
 
-  createComment: async (postId, content) => {
+  createComment: async (postId, content, parentId) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
+      const commentData: any = {
+        post_id: postId,
+        author_id: user.id,
+        content
+      };
+
+      // Only add parent_id if it's provided and the column exists
+      if (parentId) {
+        try {
+          commentData.parent_id = parentId;
+        } catch (e) {
+          console.warn('Parent_id column not available:', e);
+        }
+      }
+
       const { error } = await supabase
         .from('post_comments')
-        .insert({
-          post_id: postId,
-          author_id: user.id,
-          content
-        });
+        .insert(commentData);
 
       if (error) throw error;
+
+      // If this is a reply and the increment function exists, update replies_count
+      if (parentId) {
+        try {
+          await supabase.rpc('increment_comment_replies_count', { 
+            p_comment_id: parentId 
+          });
+        } catch (e) {
+          console.warn('Increment replies count function not available:', e);
+        }
+      }
 
       // Update comments count
       set(state => ({
@@ -277,6 +454,33 @@ export const useFeedStore = create<FeedState>((set, get) => ({
             : post
         )
       }));
+    } catch (error) {
+      set({ error: (error as Error).message });
+    }
+  },
+  
+  likeComment: async (commentId) => {
+    try {
+      try {
+        await supabase.rpc('like_comment', { p_comment_id: commentId });
+      } catch (e) {
+        console.warn('Like comment function not available:', e);
+      }
+    } catch (error) {
+      set({ error: (error as Error).message });
+    }
+  },
+  
+  repostComment: async (commentId, content) => {
+    try {
+      try {
+        await supabase.rpc('repost_comment', { 
+          p_comment_id: commentId,
+          p_content: content
+        });
+      } catch (e) {
+        console.warn('Repost comment function not available:', e);
+      }
     } catch (error) {
       set({ error: (error as Error).message });
     }

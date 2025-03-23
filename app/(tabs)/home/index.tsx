@@ -1,17 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TextInput, Pressable, FlatList, RefreshControl } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, Image, TextInput, Pressable, FlatList, RefreshControl, ActivityIndicator, Animated } from 'react-native';
 import { Link } from 'expo-router';
 import { Heart, MessageCircle, Repeat2, Bookmark, Share2, Search, TrendingUp, Plus } from 'lucide-react-native';
 import { useFeedStore, Post } from '@/stores/useFeedStore';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { ErrorMessage } from '@/components/ErrorMessage';
 
-const PostCard = ({ post }: { post: Post }) => {
+// Mock LinearGradient component to avoid dependency on expo-linear-gradient
+const MockLinearGradient = ({ style, children }: any) => {
+  return <View style={[{ backgroundColor: '#f0f0f0' }, style]}>{children}</View>;
+};
+
+// Memoize PostCard to prevent unnecessary re-renders
+const PostCard = React.memo(({ post }: { post: Post }) => {
   const { likePost, repostPost } = useFeedStore();
   const [isLiking, setIsLiking] = useState(false);
   const [isReposting, setIsReposting] = useState(false);
 
-  const handleLike = async () => {
+  const handleLike = useCallback(async () => {
     if (isLiking) return;
     setIsLiking(true);
     try {
@@ -21,9 +27,9 @@ const PostCard = ({ post }: { post: Post }) => {
     } finally {
       setIsLiking(false);
     }
-  };
+  }, [post.id, isLiking, likePost]);
 
-  const handleRepost = async () => {
+  const handleRepost = useCallback(async () => {
     if (isReposting) return;
     setIsReposting(true);
     try {
@@ -33,7 +39,7 @@ const PostCard = ({ post }: { post: Post }) => {
     } finally {
       setIsReposting(false);
     }
-  };
+  }, [post.id, isReposting, repostPost]);
 
   return (
     <View style={styles.postCard}>
@@ -108,15 +114,112 @@ const PostCard = ({ post }: { post: Post }) => {
       </View>
     </View>
   );
-};
+});
 
-const TrendingHashtag = ({ hashtag }: { hashtag: { name: string; post_count: number } }) => (
-  <Link href={`/home/hashtag/${hashtag.name}`} asChild>
-    <Pressable style={styles.trendingTag}>
-      <Text style={styles.trendingTagText}>#{hashtag.name}</Text>
-      <Text style={styles.trendingCount}>{hashtag.post_count} posts</Text>
+// Memoize TrendingHashtag to prevent unnecessary re-renders
+const TrendingHashtag = React.memo(({ hashtag }: { hashtag: { name: string; post_count: number } }) => (
+  <Link href={{
+    pathname: '/home', 
+    params: { hashtag: hashtag.name }
+  }} asChild>
+    <Pressable style={styles.trendingHashtag}>
+      <Text style={styles.trendingHashtagText}>#{hashtag.name}</Text>
+      <Text style={styles.trendingHashtagCount}>{hashtag.post_count} posts</Text>
     </Pressable>
   </Link>
+));
+
+// Shimmer effect component for skeleton loaders
+const Shimmer = () => {
+  const shimmerAnimatedValue = useRef(new Animated.Value(0)).current;
+  
+  useEffect(() => {
+    const shimmerAnimation = Animated.loop(
+      Animated.timing(shimmerAnimatedValue, {
+        toValue: 1,
+        duration: 1500,
+        useNativeDriver: false,
+      })
+    );
+    
+    shimmerAnimation.start();
+    
+    return () => {
+      shimmerAnimation.stop();
+    };
+  }, []);
+  
+  // Create animation values for opacity to create shimmer effect without LinearGradient
+  const opacity = shimmerAnimatedValue.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0.3, 0.6, 0.3]
+  });
+  
+  return (
+    <Animated.View 
+      style={{ 
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        opacity,
+        backgroundColor: '#FFFFFF',
+      }}
+    />
+  );
+};
+
+// Skeleton loader component for posts
+const PostSkeleton = () => (
+  <View style={styles.postCard}>
+    <View style={styles.postHeader}>
+      <View style={[styles.avatar, styles.skeleton]}>
+        <Shimmer />
+      </View>
+      <View style={styles.authorInfo}>
+        <View style={[styles.nameSkeleton, styles.skeleton]}>
+          <Shimmer />
+        </View>
+        <View style={[styles.specialtySkeleton, styles.skeleton]}>
+          <Shimmer />
+        </View>
+        <View style={[styles.timestampSkeleton, styles.skeleton]}>
+          <Shimmer />
+        </View>
+      </View>
+    </View>
+    
+    <View style={[styles.contentSkeleton, styles.skeleton]}>
+      <Shimmer />
+    </View>
+    <View style={[styles.contentSkeletonShort, styles.skeleton]}>
+      <Shimmer />
+    </View>
+    
+    <View style={styles.engagement}>
+      <View style={styles.engagementButton}>
+        <View style={[styles.iconSkeleton, styles.skeleton]}>
+          <Shimmer />
+        </View>
+      </View>
+      <View style={styles.engagementButton}>
+        <View style={[styles.iconSkeleton, styles.skeleton]}>
+          <Shimmer />
+        </View>
+      </View>
+      <View style={styles.engagementButton}>
+        <View style={[styles.iconSkeleton, styles.skeleton]}>
+          <Shimmer />
+        </View>
+      </View>
+      <View style={styles.engagementButton}>
+        <View style={[styles.iconSkeleton, styles.skeleton]}>
+          <Shimmer />
+        </View>
+      </View>
+    </View>
+  </View>
 );
 
 export default function Feed() {
@@ -124,35 +227,133 @@ export default function Feed() {
     posts, 
     trendingHashtags,
     isLoading, 
+    isLoadingMore,
+    hasMorePosts,
     error, 
     fetchPosts,
+    loadMorePosts,
+    refreshPosts,
     fetchTrendingHashtags 
   } = useFeedStore();
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [firstLoad, setFirstLoad] = useState(true);
 
+  // Initial data fetch - will use cache if available
   useEffect(() => {
-    fetchPosts();
-    fetchTrendingHashtags();
+    const loadInitialData = async () => {
+      await Promise.all([
+        fetchPosts(),
+        fetchTrendingHashtags()
+      ]);
+      // Set firstLoad to false after initial data fetch
+      setFirstLoad(false);
+    };
+    
+    loadInitialData();
   }, []);
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([
-      fetchPosts(),
-      fetchTrendingHashtags()
-    ]);
-    setRefreshing(false);
-  };
+    try {
+      await Promise.all([
+        refreshPosts(), // Force refresh
+        fetchTrendingHashtags()
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshPosts, fetchTrendingHashtags]);
 
-  const handleSearch = async (query: string) => {
+  const handleLoadMore = useCallback(() => {
+    if (!isLoadingMore && hasMorePosts) {
+      loadMorePosts();
+    }
+  }, [isLoadingMore, hasMorePosts, loadMorePosts]);
+
+  const handleSearch = useCallback(async (query: string) => {
     setSearchQuery(query);
     // Implement search functionality
-  };
-
-  if (isLoading && !refreshing) {
-    return <LoadingOverlay message="Loading feed..." />;
-  }
+  }, []);
+  
+  // Render footer for FlatList (loading indicator when loading more posts)
+  const renderFooter = useMemo(() => {
+    if (!isLoadingMore) return null;
+    
+    return (
+      <View style={styles.loadingMoreContainer}>
+        <ActivityIndicator size="small" color="#0066CC" />
+        <Text style={styles.loadingMoreText}>Loading more posts...</Text>
+      </View>
+    );
+  }, [isLoadingMore]);
+  
+  // Render placeholder content while loading
+  const renderPlaceholderContent = useMemo(() => {
+    return (
+      <>
+        <View style={styles.trendingSection}>
+          <View style={styles.trendingHeader}>
+            <TrendingUp size={20} color="#1A1A1A" />
+            <Text style={styles.trendingTitle}>Trending Topics</Text>
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.trendingContainer}>
+            {[1, 2, 3, 4, 5].map((_, index) => (
+              <View key={index} style={[styles.trendingHashtagSkeleton, styles.skeleton]} />
+            ))}
+          </ScrollView>
+        </View>
+        
+        {[1, 2, 3].map((_, index) => (
+          <PostSkeleton key={index} />
+        ))}
+      </>
+    );
+  }, []);
+  
+  // Memoize the list header component to prevent unnecessary re-renders
+  const ListHeaderComponent = useMemo(() => (
+    <View>
+      <View style={styles.trendingSection}>
+        <View style={styles.trendingHeader}>
+          <TrendingUp size={20} color="#1A1A1A" />
+          <Text style={styles.trendingTitle}>Trending Topics</Text>
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.trendingContainer}>
+          {trendingHashtags.length > 0 
+            ? trendingHashtags.map((hashtag) => (
+                <TrendingHashtag key={hashtag.name} hashtag={hashtag} />
+              ))
+            : (firstLoad || isLoading) && [1, 2, 3, 4, 5].map((_, index) => (
+                <View key={index} style={[styles.trendingHashtagSkeleton, styles.skeleton]} />
+              ))
+          }
+        </ScrollView>
+      </View>
+    </View>
+  ), [trendingHashtags, firstLoad, isLoading]);
+  
+  // Memoize the empty component to prevent unnecessary re-renders
+  const ListEmptyComponent = useMemo(() => {
+    if (firstLoad || isLoading) {
+      return renderPlaceholderContent;
+    }
+    
+    return (
+      <View style={styles.emptyState}>
+        <Text style={styles.emptyStateText}>No posts yet</Text>
+        <Text style={styles.emptyStateSubtext}>
+          Follow doctors or create your first post
+        </Text>
+      </View>
+    );
+  }, [firstLoad, isLoading, renderPlaceholderContent]);
 
   return (
     <View style={styles.container}>
@@ -186,21 +387,6 @@ export default function Feed() {
         />
       )}
 
-      <View style={styles.trendingSection}>
-        <View style={styles.trendingHeader}>
-          <TrendingUp size={20} color="#1A1A1A" />
-          <Text style={styles.trendingTitle}>Trending Topics</Text>
-        </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.trendingContainer}>
-          {trendingHashtags.map((hashtag) => (
-            <TrendingHashtag key={hashtag.name} hashtag={hashtag} />
-          ))}
-        </ScrollView>
-      </View>
-
       <FlatList
         data={posts}
         renderItem={({ item }) => <PostCard post={item} />}
@@ -210,14 +396,17 @@ export default function Feed() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No posts yet</Text>
-            <Text style={styles.emptyStateSubtext}>
-              Follow doctors or create your first post
-            </Text>
-          </View>
-        }
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={renderFooter}
+        // Performance optimizations
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={5}
+        windowSize={10}
+        initialNumToRender={5}
+        updateCellsBatchingPeriod={50}
+        ListHeaderComponent={ListHeaderComponent}
+        ListEmptyComponent={ListEmptyComponent}
       />
 
       <Link href="/home/create" asChild>
@@ -302,19 +491,19 @@ const styles = StyleSheet.create({
     gap: 8,
     flexDirection: 'row',
   },
-  trendingTag: {
+  trendingHashtag: {
     backgroundColor: '#F0F2F5',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
     marginRight: 8,
   },
-  trendingTagText: {
+  trendingHashtagText: {
     fontSize: 14,
     fontFamily: 'Inter_500Medium',
     color: '#0066CC',
   },
-  trendingCount: {
+  trendingHashtagCount: {
     fontSize: 12,
     fontFamily: 'Inter_400Regular',
     color: '#666666',
@@ -460,5 +649,58 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter_400Regular',
     color: '#666666',
+  },
+  skeleton: {
+    backgroundColor: '#E5E5E5',
+    borderRadius: 4,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  nameSkeleton: {
+    width: 100,
+    height: 16,
+    marginBottom: 8,
+  },
+  specialtySkeleton: {
+    width: 80,
+    height: 12,
+    marginBottom: 4,
+  },
+  timestampSkeleton: {
+    width: 60,
+    height: 10,
+  },
+  contentSkeleton: {
+    height: 20,
+    marginBottom: 8,
+    width: '100%',
+  },
+  contentSkeletonShort: {
+    height: 20,
+    marginBottom: 12,
+    width: '70%',
+  },
+  iconSkeleton: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+  },
+  trendingHashtagSkeleton: {
+    width: 120,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 8,
+  },
+  loadingMoreContainer: {
+    padding: 16,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  loadingMoreText: {
+    fontSize: 14,
+    color: '#666666',
+    marginLeft: 8,
+    fontFamily: 'Inter_400Regular',
   },
 });
