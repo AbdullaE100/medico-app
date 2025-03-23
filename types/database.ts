@@ -12,6 +12,8 @@ export interface Profile {
   posts_count: number;
   created_at: string;
   updated_at: string;
+  // Connection status for UI display (added at runtime)
+  connection_status?: 'none' | 'pending' | 'connected';
 }
 
 export interface ProfileSettings {
