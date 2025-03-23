@@ -104,9 +104,11 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          // Hide from tab bar but maintain functionality
-          href: null, // Prevents the tab from being accessible via direct URL
-          tabBarButton: () => null, // Remove the button from the tab bar
+          // Fix: href and tabBarButton cannot be used together
+          // Use tabBarItemStyle to hide the tab instead
+          tabBarItemStyle: { display: 'none' },
+          // Keep the tab accessible but not visible
+          headerShown: false
         }}
       />
       <Tabs.Screen

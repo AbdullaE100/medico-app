@@ -110,8 +110,8 @@ export default function SignIn() {
     console.log("Sign in result:", success);
     
     if (success) {
-      // Navigate directly to the home tab
-      router.replace('/(tabs)/home');
+      // Navigate directly to the home tab using the correct path format
+      router.replace('/home');
     }
   };
 
