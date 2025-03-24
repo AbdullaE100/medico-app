@@ -106,12 +106,23 @@ export default function SignIn() {
     }
 
     console.log("Attempting to sign in with:", email);
-    const success = await signIn(email, password);
-    console.log("Sign in result:", success);
+    console.log("Attempting sign in...");
     
-    if (success) {
-      // Navigate directly to the home tab using the correct path format
-      router.replace('/home');
+    try {
+      const success = await signIn(email, password);
+      console.log("Sign in result:", success);
+      console.log("Authentication state after login:", useAuthStore.getState().isAuthenticated);
+      
+      if (success) {
+        console.log("Login successful, navigating to home");
+        // Try both navigation methods to see which one works
+        setTimeout(() => {
+          console.log("Attempting navigation with delay");
+          router.replace('/home');
+        }, 500);
+      }
+    } catch (error) {
+      console.error("Error during sign in:", error);
     }
   };
 
@@ -146,7 +157,8 @@ export default function SignIn() {
       <StatusBar style="light" />
       
       <LinearGradient
-        colors={['#093474', '#0066CC']}
+        colors={['#093474', '#0066CC', '#0091FF']}
+        locations={[0, 0.6, 1]}
         style={styles.headerBackground}
       />
 
@@ -282,27 +294,21 @@ export default function SignIn() {
             
             <View style={styles.socialButtonsContainer}>
               <TouchableOpacity style={styles.socialButton}>
-                <ImageBackground
-                  source={{ uri: 'https://www.freepnglogos.com/uploads/google-logo-png/google-logo-png-suite-everything-you-need-know-about-google-newest-0.png' }}
-                  style={styles.socialIcon}
-                  imageStyle={{ borderRadius: 8 }}
-                />
+                <View style={styles.socialIconContainer}>
+                  <Text style={styles.socialIconLetter}>G</Text>
+                </View>
               </TouchableOpacity>
               
               <TouchableOpacity style={styles.socialButton}>
-                <ImageBackground
-                  source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Apple_logo_black.svg/1667px-Apple_logo_black.svg.png' }}
-                  style={styles.socialIcon}
-                  imageStyle={{ borderRadius: 8 }}
-                />
+                <View style={[styles.socialIconContainer, {backgroundColor: '#000'}]}>
+                  <Text style={[styles.socialIconLetter, {color: '#FFF'}]}>A</Text>
+                </View>
               </TouchableOpacity>
               
               <TouchableOpacity style={styles.socialButton}>
-                <ImageBackground
-                  source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/ca/LinkedIn_logo_initials.png/640px-LinkedIn_logo_initials.png' }}
-                  style={styles.socialIcon}
-                  imageStyle={{ borderRadius: 8 }}
-                />
+                <View style={[styles.socialIconContainer, {backgroundColor: '#0077B5'}]}>
+                  <Text style={[styles.socialIconLetter, {color: '#FFF'}]}>L</Text>
+                </View>
               </TouchableOpacity>
             </View>
           </Animated.View>
@@ -344,6 +350,8 @@ const styles = StyleSheet.create({
     height: height * 0.35,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
+    zIndex: 0,
+    overflow: 'hidden',
   },
   scrollContent: {
     flexGrow: 1,
@@ -435,6 +443,7 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.1,
     shadowRadius: 24,
+    zIndex: 1,
   },
   welcomeText: {
     fontSize: 28,
@@ -571,9 +580,18 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 2,
   },
-  socialIcon: {
+  socialIconContainer: {
     width: 28,
     height: 28,
+    borderRadius: 6,
+    backgroundColor: '#4285F4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  socialIconLetter: {
+    fontSize: 16,
+    fontFamily: 'Inter_700Bold',
+    color: '#FFFFFF',
   },
   signUpSection: {
     flexDirection: 'row',
@@ -601,6 +619,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: -1,
     overflow: 'hidden',
+    pointerEvents: 'none',
   },
   patternDot: {
     position: 'absolute',

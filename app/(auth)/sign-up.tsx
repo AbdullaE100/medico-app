@@ -1,13 +1,41 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, SafeAreaView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TextInput, 
+  TouchableOpacity, 
+  SafeAreaView, 
+  ImageBackground,
+  Dimensions, 
+  KeyboardAvoidingView, 
+  Platform,
+  Animated,
+  Easing,
+  Pressable,
+  ScrollView
+} from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { StatusBar } from 'expo-status-bar';
-import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { 
+  Heart, 
+  Mail, 
+  Lock, 
+  Eye, 
+  EyeOff, 
+  Stethoscope,
+  User,
+  ArrowRight,
+} from 'lucide-react-native';
+
+const { width, height } = Dimensions.get('window');
 
 export default function SignUp() {
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -16,9 +44,73 @@ export default function SignUp() {
   const { signUp, isLoading, error } = useAuthStore();
   const router = useRouter();
 
+  // Animation values
+  const logoScale = new Animated.Value(0.8);
+  const logoOpacity = new Animated.Value(0);
+  const formTranslateY = new Animated.Value(30);
+  const formOpacity = new Animated.Value(0);
+  const buttonScale = new Animated.Value(0.95);
+  const buttonOpacity = new Animated.Value(0);
+
+  useEffect(() => {
+    // Sequence of animations
+    Animated.sequence([
+      // First animate the logo
+      Animated.parallel([
+        Animated.timing(logoScale, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.back(1.5)),
+        }),
+        Animated.timing(logoOpacity, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.ease),
+        }),
+      ]),
+      // Then animate the form
+      Animated.parallel([
+        Animated.timing(formTranslateY, {
+          toValue: 0,
+          duration: 600,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.ease),
+        }),
+        Animated.timing(formOpacity, {
+          toValue: 1,
+          duration: 600,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.ease),
+        }),
+      ]),
+      // Then animate the button
+      Animated.parallel([
+        Animated.timing(buttonScale, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+          easing: Easing.elastic(1),
+        }),
+        Animated.timing(buttonOpacity, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+  }, []);
+
   const handleSignUp = async () => {
-    if (!email.trim() || !password.trim() || !confirmPassword.trim()) {
+    if (!fullName.trim() || !email.trim() || !password.trim() || !confirmPassword.trim()) {
       useAuthStore.setState({ error: "All fields are required" });
+      return;
+    }
+
+    // Validate name format (should start with Dr.)
+    if (!fullName.trim().startsWith('Dr.') && !fullName.trim().startsWith('dr.')) {
+      useAuthStore.setState({ error: "Full name should start with 'Dr.'" });
       return;
     }
 
@@ -27,11 +119,33 @@ export default function SignUp() {
       return;
     }
 
-    const success = await signUp(email, password);
+    const success = await signUp(email, password, fullName);
     if (success) {
       router.replace('/onboarding');
     }
   };
+
+  // Heart pulse animation
+  const heartScale = new Animated.Value(1);
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(heartScale, {
+          toValue: 1.15,
+          duration: 800,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.ease),
+        }),
+        Animated.timing(heartScale, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+          easing: Easing.inOut(Easing.ease),
+        }),
+      ])
+    ).start();
+  }, []);
 
   if (isLoading) {
     return <LoadingOverlay message="Creating your account..." />;
@@ -39,122 +153,225 @@ export default function SignUp() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
       
-      <View style={styles.content}>
-        {/* Logo and App Name */}
-        <View style={styles.logoContainer}>
-          <View style={styles.logoBox}>
-            <Ionicons name="medical" size={20} color="#fff" />
-          </View>
-          <Text style={styles.appName}>MEDICO</Text>
-        </View>
+      <LinearGradient
+        colors={['#093474', '#0066CC', '#0091FF']}
+        locations={[0, 0.6, 1]}
+        style={styles.headerBackground}
+      />
 
-        {/* Card Container */}
-        <View style={styles.card}>
-          {/* Tab Navigation */}
-          <View style={styles.tabContainer}>
-            <Link href="/sign-in" asChild>
-              <TouchableOpacity style={styles.tab}>
-                <Text style={styles.tabText}>Sign in</Text>
-              </TouchableOpacity>
-            </Link>
-            <View style={styles.tabActive}>
-              <Text style={styles.tabTextActive}>Sign up</Text>
-            </View>
-          </View>
-
-          {error && (
-            <ErrorMessage 
-              message={error} 
-              onDismiss={() => useAuthStore.setState({ error: null })}
-            />
-          )}
-
-          {/* Form Inputs */}
-          <View style={styles.formContainer}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>E-mail/Phone</Text>
-              <TextInput
-                style={styles.input}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="Email/Phone"
-                placeholderTextColor="#A0A0A0"
-                autoCapitalize="none"
-                keyboardType="email-address"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={styles.input}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Choose a password"
-                placeholderTextColor="#A0A0A0"
-                secureTextEntry={!showPassword}
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Confirm Password</Text>
-              <TextInput
-                style={styles.input}
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                placeholder="Confirm your password"
-                placeholderTextColor="#A0A0A0"
-                secureTextEntry={!showConfirmPassword}
-              />
-            </View>
-          </View>
-
-          {/* Terms of Service */}
-          <Text style={styles.termsText}>
-            By signing up, you agree to our <Text style={styles.linkText}>Terms of Service</Text> and <Text style={styles.linkText}>Privacy Policy</Text>
-          </Text>
-
-          {/* Sign Up Button */}
-          <TouchableOpacity 
-            style={styles.signUpButton} 
-            onPress={handleSignUp}
-            activeOpacity={0.9}
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.content}
+        >
+          {/* Top Logo Section */}
+          <Animated.View 
+            style={[
+              styles.logoSection,
+              { 
+                opacity: logoOpacity,
+                transform: [{ scale: logoScale }] 
+              }
+            ]}
           >
-            <Text style={styles.signUpButtonText}>Create Account</Text>
-          </TouchableOpacity>
-
-          {/* Or Sign up with */}
-          <View style={styles.dividerContainer}>
-            <View style={styles.divider} />
-            <Text style={styles.dividerText}>Or signup with</Text>
-            <View style={styles.divider} />
-          </View>
-
-          {/* Social Login Options */}
-          <View style={styles.socialLoginContainer}>
-            <TouchableOpacity style={styles.socialButton}>
-              <Ionicons name="logo-google" size={20} color="#EA4335" />
-              <Text style={styles.socialButtonText}>Google</Text>
-            </TouchableOpacity>
+            <View style={styles.logoContainer}>
+              <Animated.View 
+                style={[
+                  styles.heartContainer,
+                  { transform: [{ scale: heartScale }] }
+                ]}
+              >
+                <Heart size={24} color="#fff" fill="#fff" />
+              </Animated.View>
+              <View style={styles.stethoscopeContainer}>
+                <Stethoscope size={32} color="#fff" />
+              </View>
+            </View>
+            <Text style={styles.appName}>MEDICO</Text>
+            <Text style={styles.appTagline}>Join the Healthcare Network</Text>
+          </Animated.View>
+          
+          {/* Form Section */}
+          <Animated.View 
+            style={[
+              styles.formSection,
+              {
+                opacity: formOpacity,
+                transform: [{ translateY: formTranslateY }]
+              }
+            ]}
+          >
+            <Text style={styles.welcomeText}>Create Account</Text>
+            <Text style={styles.welcomeSubtext}>Start your medical journey with us</Text>
             
-            <TouchableOpacity style={styles.socialButton}>
-              <Ionicons name="logo-microsoft" size={20} color="#00A4EF" />
-              <Text style={styles.socialButtonText}>Microsoft</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Sign In Link */}
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Already have an account? </Text>
-            <Link href="/sign-in" asChild>
+            {error && (
+              <ErrorMessage 
+                message={error} 
+                onDismiss={() => useAuthStore.setState({ error: null })}
+              />
+            )}
+            
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Full Name (Dr. Name) *</Text>
+              <View style={styles.inputContainer}>
+                <User size={20} color="#0066CC" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  value={fullName}
+                  onChangeText={setFullName}
+                  placeholder="Dr. John Smith"
+                  placeholderTextColor="#A3A3A3"
+                />
+              </View>
+              <Text style={styles.inputNote}>This name will be visible to other users</Text>
+            </View>
+            
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Email *</Text>
+              <View style={styles.inputContainer}>
+                <Mail size={20} color="#0066CC" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="Your professional email"
+                  placeholderTextColor="#A3A3A3"
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
+              </View>
+              <Text style={styles.inputNote}>Your email will not be visible to other users</Text>
+            </View>
+            
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Password *</Text>
+              <View style={styles.inputContainer}>
+                <Lock size={20} color="#0066CC" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Choose a secure password"
+                  placeholderTextColor="#A3A3A3"
+                  secureTextEntry={!showPassword}
+                />
+                <TouchableOpacity 
+                  style={styles.visibilityToggle}
+                  onPress={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? 
+                    <EyeOff size={20} color="#0066CC" /> : 
+                    <Eye size={20} color="#0066CC" />
+                  }
+                </TouchableOpacity>
+              </View>
+            </View>
+            
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Confirm Password *</Text>
+              <View style={styles.inputContainer}>
+                <Lock size={20} color="#0066CC" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  placeholder="Confirm your password"
+                  placeholderTextColor="#A3A3A3"
+                  secureTextEntry={!showConfirmPassword}
+                />
+                <TouchableOpacity 
+                  style={styles.visibilityToggle}
+                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                >
+                  {showConfirmPassword ? 
+                    <EyeOff size={20} color="#0066CC" /> : 
+                    <Eye size={20} color="#0066CC" />
+                  }
+                </TouchableOpacity>
+              </View>
+            </View>
+            
+            <Text style={styles.termsText}>
+              By signing up, you agree to our{' '}
+              <Text style={styles.linkText}>Terms of Service</Text> and{' '}
+              <Text style={styles.linkText}>Privacy Policy</Text>
+            </Text>
+            
+            <Animated.View style={{ 
+              opacity: buttonOpacity, 
+              transform: [{ scale: buttonScale }],
+              width: '100%'
+            }}>
+              <TouchableOpacity 
+                style={styles.signUpButton} 
+                onPress={handleSignUp}
+                activeOpacity={0.9}
+              >
+                <LinearGradient
+                  colors={['#0066CC', '#0091ff']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.buttonGradient}
+                >
+                  <Text style={styles.signUpButtonText}>Create Account</Text>
+                  <View style={styles.arrowContainer}>
+                    <ArrowRight size={18} color="#fff" />
+                  </View>
+                </LinearGradient>
+              </TouchableOpacity>
+            </Animated.View>
+            
+            <View style={styles.dividerContainer}>
+              <View style={styles.divider} />
+              <Text style={styles.dividerText}>or continue with</Text>
+              <View style={styles.divider} />
+            </View>
+            
+            <View style={styles.socialButtonsContainer}>
+              <TouchableOpacity style={styles.socialButton}>
+                <View style={styles.socialIconContainer}>
+                  <Text style={styles.socialIconLetter}>G</Text>
+                </View>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.socialButton}>
+                <View style={[styles.socialIconContainer, {backgroundColor: '#000'}]}>
+                  <Text style={[styles.socialIconLetter, {color: '#FFF'}]}>A</Text>
+                </View>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.socialButton}>
+                <View style={[styles.socialIconContainer, {backgroundColor: '#0077B5'}]}>
+                  <Text style={[styles.socialIconLetter, {color: '#FFF'}]}>L</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+          
+          {/* Sign In Section */}
+          <View style={styles.signInSection}>
+            <Text style={styles.signInText}>Already have an account?</Text>
+            <Link href="/(auth)/sign-in" asChild>
               <TouchableOpacity>
-                <Text style={styles.signInText}>Sign in</Text>
+                <Text style={styles.signInLink}>Sign In</Text>
               </TouchableOpacity>
             </Link>
           </View>
-        </View>
+        </KeyboardAvoidingView>
+      </ScrollView>
+
+      {/* Medical pattern overlay */}
+      <View style={styles.patternContainer}>
+        <View style={styles.patternDot} />
+        <View style={styles.patternCircle} />
+        <View style={styles.patternSquare} />
+        <View style={[styles.patternDot, styles.patternDot2]} />
+        <View style={[styles.patternCircle, styles.patternCircle2]} />
       </View>
     </SafeAreaView>
   );
@@ -163,170 +380,335 @@ export default function SignUp() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#f8fafc',
+  },
+  headerBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: height * 0.35,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    zIndex: 0,
+    overflow: 'hidden',
+  },
+  scrollContent: {
+    flexGrow: 1,
+    minHeight: '100%',
   },
   content: {
     flex: 1,
-    paddingHorizontal: 16,
-    justifyContent: 'center',
+    paddingHorizontal: 24,
+    justifyContent: 'flex-start',
     alignItems: 'center',
-    fontFamily: 'Inter_400Regular',
+  },
+  logoSection: {
+    width: '100%',
+    alignItems: 'center',
+    marginTop: height * 0.06,
+    marginBottom: 30,
   },
   logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 32,
-    gap: 8,
+    width: 90,
+    height: 90,
+    marginBottom: 20,
+    position: 'relative',
   },
-  logoBox: {
-    width: 32,
-    height: 32,
-    backgroundColor: '#0EA5E9',
-    borderRadius: 8,
+  heartContainer: {
+    position: 'absolute',
+    width: 50,
+    height: 50,
+    backgroundColor: '#ff6b6b',
+    borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  appName: {
-    fontSize: 24,
-    fontFamily: 'Inter_600SemiBold',
-    color: '#0EA5E9',
-  },
-  card: {
-    width: '100%',
-    maxWidth: 428,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 24,
+    top: 0,
+    left: 20,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 1,
+      height: 4,
     },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 8,
   },
-  tabContainer: {
-    flexDirection: 'row',
-    gap: 32,
+  stethoscopeContainer: {
+    position: 'absolute',
+    width: 64,
+    height: 64,
+    backgroundColor: '#0091ff',
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    bottom: 0,
+    right: 0,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 8,
+  },
+  appName: {
+    fontSize: 32,
+    fontFamily: 'Inter_700Bold',
+    color: '#ffffff',
+    letterSpacing: 2,
+    marginBottom: 8,
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  appTagline: {
+    fontSize: 16,
+    fontFamily: 'Inter_400Regular',
+    color: '#ffffff',
+    opacity: 0.9,
+  },
+  formSection: {
+    width: '100%',
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    padding: 24,
+    marginTop: 20,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 24,
+    zIndex: 1,
+  },
+  welcomeText: {
+    fontSize: 28,
+    fontFamily: 'Inter_700Bold',
+    color: '#1e293b',
+    marginBottom: 8,
+  },
+  welcomeSubtext: {
+    fontSize: 16,
+    fontFamily: 'Inter_400Regular',
+    color: '#64748b',
     marginBottom: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  tab: {
-    paddingBottom: 12,
-  },
-  tabActive: {
-    paddingBottom: 12,
-    borderBottomWidth: 2,
-    borderBottomColor: '#0EA5E9',
-  },
-  tabText: {
-    fontSize: 16,
-    fontFamily: 'Inter_500Medium',
-    color: '#6B7280',
-  },
-  tabTextActive: {
-    fontSize: 16,
-    fontFamily: 'Inter_500Medium',
-    color: '#0EA5E9',
-  },
-  formContainer: {
-    gap: 16,
-    marginBottom: 16,
   },
   inputGroup: {
-    gap: 8,
+    marginBottom: 20,
+    width: '100%',
   },
-  label: {
-    fontSize: 14,
+  inputLabel: {
+    fontSize: 15,
     fontFamily: 'Inter_500Medium',
-    color: '#374151',
+    color: '#334155',
+    marginBottom: 8,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    height: 56,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 16,
+  },
+  inputIcon: {
+    marginRight: 12,
   },
   input: {
-    width: '100%',
-    height: 44,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    fontSize: 14,
+    flex: 1,
+    height: '100%',
+    fontSize: 16,
     fontFamily: 'Inter_400Regular',
+    color: '#334155',
+  },
+  inputNote: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    color: '#64748b',
+    marginTop: 6,
+    marginLeft: 4,
+  },
+  visibilityToggle: {
+    padding: 4,
   },
   termsText: {
     fontSize: 13,
     fontFamily: 'Inter_400Regular',
-    color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 16,
+    color: '#64748b',
+    marginBottom: 20,
+    lineHeight: 18,
   },
   linkText: {
-    color: '#0EA5E9',
+    color: '#0066CC',
     fontFamily: 'Inter_500Medium',
   },
   signUpButton: {
     width: '100%',
-    height: 44,
-    backgroundColor: '#0EA5E9',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
+    height: 56,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginTop: 8,
     marginBottom: 24,
+    shadowColor: '#0066CC',
+    shadowOffset: {
+      width: 0,
+      height: 6,
+    },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  buttonGradient: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
   },
   signUpButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#ffffff',
+    marginRight: 8,
+  },
+  arrowContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dividerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
     marginBottom: 24,
+    width: '100%',
   },
   divider: {
     flex: 1,
     height: 1,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#e2e8f0',
   },
   dividerText: {
+    paddingHorizontal: 12,
     fontSize: 14,
     fontFamily: 'Inter_400Regular',
-    color: '#6B7280',
+    color: '#64748b',
   },
-  socialLoginContainer: {
+  socialButtonsContainer: {
     flexDirection: 'row',
-    gap: 16,
-    marginBottom: 24,
+    justifyContent: 'center',
+    width: '100%',
+    gap: 20,
   },
   socialButton: {
-    flex: 1,
-    height: 44,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    flexDirection: 'row',
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  socialButtonText: {
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    color: '#374151',
-  },
-  footer: {
-    flexDirection: 'row',
+  socialIconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: '#4285F4',
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  footerText: {
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    color: '#6B7280',
+  socialIconLetter: {
+    fontSize: 16,
+    fontFamily: 'Inter_700Bold',
+    color: '#FFFFFF',
+  },
+  signInSection: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 32,
+    marginBottom: 20,
   },
   signInText: {
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
-    color: '#0EA5E9',
+    fontSize: 15,
+    fontFamily: 'Inter_400Regular',
+    color: '#64748b',
+    marginRight: 4,
+  },
+  signInLink: {
+    fontSize: 15,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#0066CC',
+  },
+  patternContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: -1,
+    overflow: 'hidden',
+    pointerEvents: 'none',
+  },
+  patternDot: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#0066CC',
+    opacity: 0.1,
+    top: height * 0.15,
+    right: 20,
+  },
+  patternDot2: {
+    top: height * 0.85,
+    left: 30,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  patternCircle: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 10,
+    borderColor: 'rgba(0, 102, 204, 0.08)',
+    top: height * 0.25,
+    left: -30,
+  },
+  patternCircle2: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    top: height * 0.65,
+    right: -40,
+  },
+  patternSquare: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    transform: [{ rotate: '45deg' }],
+    backgroundColor: 'rgba(0, 145, 255, 0.08)',
+    bottom: height * 0.3,
+    right: 40,
   },
 });

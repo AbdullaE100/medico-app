@@ -22,8 +22,10 @@ export default function TabLayout() {
 
   // Load data in parallel batches to improve performance
   useEffect(() => {
+    console.log("TabLayout: Authentication state changed. isAuthenticated =", isAuthenticated);
+    
     if (isAuthenticated) {
-      console.log("User is authenticated, loading data...");
+      console.log("TabLayout: User is authenticated, loading data...");
       
       // First batch - Critical UI data
       Promise.all([
@@ -50,12 +52,16 @@ export default function TabLayout() {
         .finally(() => {
           // Mark initialization as complete
           setIsInitialized(true);
+          console.log("TabLayout: All data loaded and initialized");
         });
       }, 200);
     } else {
-      console.log("User is not authenticated yet");
+      console.log("TabLayout: User is not authenticated yet");
       // Even if not authenticated, mark as initialized after a timeout
-      setTimeout(() => setIsInitialized(true), 500);
+      setTimeout(() => {
+        setIsInitialized(true);
+        console.log("TabLayout: Marked as initialized even though not authenticated");
+      }, 500);
     }
   }, [isAuthenticated]);
 

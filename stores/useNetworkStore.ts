@@ -17,6 +17,7 @@ interface NetworkState {
   followedDoctors: Set<string>;
   pendingRequests: ConnectionRequest[];
   receivedRequests: ConnectionRequest[];
+  suggestedDoctors: Profile[];
   isLoading: boolean;
   error: string | null;
   fetchDoctors: (search?: string, specialty?: string, sort?: 'followers' | 'recent') => Promise<void>;
@@ -26,6 +27,7 @@ interface NetworkState {
   acceptConnectionRequest: (requestId: string) => Promise<void>;
   rejectConnectionRequest: (requestId: string) => Promise<void>;
   fetchConnectionRequests: () => Promise<void>;
+  fetchSuggestedConnections: () => Promise<void>;
 }
 
 export const useNetworkStore = create<NetworkState>((set, get) => ({
@@ -33,6 +35,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   followedDoctors: new Set(),
   pendingRequests: [],
   receivedRequests: [],
+  suggestedDoctors: [],
   isLoading: false,
   error: null,
 
@@ -41,7 +44,13 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     try {
       let query = supabase
         .from('profiles')
-        .select('*');
+        .select('*')
+        // Filter to only show verified profiles with full_name
+        .not('full_name', 'is', null)
+        .not('full_name', 'eq', '')
+        // Ensure the profile is somewhat complete
+        .not('specialty', 'is', null)
+        .not('specialty', 'eq', '');
 
       if (search) {
         query = query.or(`full_name.ilike.%${search}%,specialty.ilike.%${search}%,hospital.ilike.%${search}%`);
@@ -55,6 +64,9 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
         query = query.order('followers_count', { ascending: false });
       } else if (sort === 'recent') {
         query = query.order('created_at', { ascending: false });
+      } else {
+        // Default sorting by completion of profile
+        query = query.order('followers_count', { ascending: false });
       }
 
       const { data, error } = await query;
@@ -240,6 +252,66 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
           )
         };
       });
+    } catch (error) {
+      set({ error: (error as Error).message });
+    }
+  },
+
+  fetchSuggestedConnections: async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Get user's specialty
+      const { data: userProfile } = await supabase
+        .from('profiles')
+        .select('specialty')
+        .eq('id', user.id)
+        .single();
+
+      if (!userProfile?.specialty) {
+        // If user has no specialty, just get some random doctors
+        const { data } = await supabase
+          .from('profiles')
+          .select('*')
+          .not('id', 'eq', user.id)
+          .not('full_name', 'is', null)
+          .not('specialty', 'is', null)
+          .limit(5);
+
+        set({ suggestedDoctors: data || [] });
+        return;
+      }
+
+      // Get doctors with same specialty
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .not('id', 'eq', user.id)
+        .eq('specialty', userProfile.specialty)
+        .not('full_name', 'is', null)
+        .limit(5);
+
+      // If not enough results, supplement with other specialties
+      if (!data || data.length < 5) {
+        const { data: additionalDoctors } = await supabase
+          .from('profiles')
+          .select('*')
+          .not('id', 'eq', user.id)
+          .not('id', 'in', data?.map(d => d.id) || [])
+          .not('full_name', 'is', null)
+          .not('specialty', 'is', null)
+          .limit(5 - (data?.length || 0));
+
+        set({ 
+          suggestedDoctors: [
+            ...(data || []),
+            ...(additionalDoctors || [])
+          ] 
+        });
+      } else {
+        set({ suggestedDoctors: data });
+      }
     } catch (error) {
       set({ error: (error as Error).message });
     }

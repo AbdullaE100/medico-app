@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, Pressable, Share, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, Pressable, Share, Alert, TouchableOpacity, Dimensions, Platform, Animated, Easing } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { MapPin, Building2, Users, Star, MessageCircle, UserPlus, Share2, UserCheck } from 'lucide-react-native';
+import { MapPin, Building2, Users, Star, MessageCircle, UserPlus, Share2, UserCheck, User as UserIcon } from 'lucide-react-native';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useChatStore } from '@/stores/useChatStore';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { ErrorMessage } from '@/components/ErrorMessage';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const { width, height } = Dimensions.get('window');
 
 const StatButton = ({ icon: Icon, label, value }: { icon: any; label: string; value: string }) => (
   <View style={styles.statButton}>
@@ -14,6 +17,26 @@ const StatButton = ({ icon: Icon, label, value }: { icon: any; label: string; va
     <Text style={styles.statLabel}>{label}</Text>
   </View>
 );
+
+// Component prop types
+interface ProfileAvatarProps {
+  uri: string | null | undefined;
+  size?: number;
+}
+
+// Placeholder component for missing profile images
+const ProfileAvatar = ({ uri, size = 100 }: ProfileAvatarProps) => {
+  if (uri && uri.startsWith('http')) {
+    return <Image source={{ uri }} style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]} />;
+  }
+  
+  // Placeholder when no avatar is available
+  return (
+    <View style={[styles.avatarPlaceholder, { width: size, height: size, borderRadius: size / 2 }]}>
+      <UserIcon size={size * 0.6} color="#FFFFFF" />
+    </View>
+  );
+};
 
 export default function DoctorProfile() {
   const { id } = useLocalSearchParams();
@@ -90,12 +113,7 @@ export default function DoctorProfile() {
           style={styles.coverPhoto} 
         />
         <View style={styles.profileInfo}>
-          <Image 
-            source={{ 
-              uri: doctor.avatar_url || 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400'
-            }} 
-            style={styles.avatar} 
-          />
+          <ProfileAvatar uri={doctor.avatar_url} size={80} />
           <View style={styles.nameContainer}>
             <View style={styles.nameRow}>
               <Text style={styles.name}>{doctor.full_name}</Text>
@@ -221,6 +239,13 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     borderWidth: 4,
     borderColor: '#FFFFFF',
+  },
+  avatarPlaceholder: {
+    backgroundColor: '#0066CC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 102, 204, 0.2)',
   },
   nameContainer: {
     marginLeft: 16,

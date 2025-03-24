@@ -24,6 +24,7 @@ import {
 import { useFeedStore, Post, Comment } from '@/stores/useFeedStore';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { ErrorMessage } from '@/components/ErrorMessage';
+import { supabase } from '@/lib/supabase';
 
 const CommentCard = ({ 
   comment, 
@@ -250,6 +251,46 @@ export default function PostDetail() {
       }
       
       setNewComment('');
+      
+      // Fetch the updated post to get accurate comments_count
+      const { data: updatedPost } = await supabase
+        .from('posts')
+        .select('*')
+        .eq('id', id)
+        .single();
+        
+      if (updatedPost && post) {
+        const updatedPostWithAuthor = {
+          ...post,
+          comments_count: updatedPost.comments_count || 0
+        };
+        
+        // Update local post state
+        setPost(updatedPostWithAuthor);
+        
+        // Also update the post in the global store to ensure consistency
+        useFeedStore.setState(state => ({
+          posts: state.posts.map(p => 
+            p.id === post.id ? updatedPostWithAuthor : p
+          )
+        }));
+      } else {
+        // Fallback: Increment local count if we couldn't fetch
+        if (post) {
+          const incrementedPost = {
+            ...post,
+            comments_count: (post.comments_count || 0) + 1
+          };
+          setPost(incrementedPost);
+          
+          useFeedStore.setState(state => ({
+            posts: state.posts.map(p => 
+              p.id === post.id ? incrementedPost : p
+            )
+          }));
+        }
+      }
+      
       await loadComments(); // Refresh comments after posting
       
       // Scroll to bottom after comment is added
@@ -432,7 +473,9 @@ export default function PostDetail() {
 
               <Pressable style={styles.engagementButton}>
                 <MessageCircle size={20} color="#666666" />
-                <Text style={styles.engagementText}>{post.comments_count}</Text>
+                <Text style={styles.engagementText}>
+                  {post.comments_count === 1 ? '1' : (post.comments_count || 0)}
+                </Text>
               </Pressable>
 
               <Pressable onPress={handleRepost} style={styles.engagementButton}>
@@ -450,7 +493,11 @@ export default function PostDetail() {
           </View>
 
           <View style={styles.commentsSection}>
-            <Text style={styles.commentsTitle}>Comments ({post?.comments_count || 0})</Text>
+            <Text style={styles.commentsTitle}>
+              {post?.comments_count === 1 
+                ? '1 Comment' 
+                : `${post?.comments_count || 0} Comments`}
+            </Text>
             
             {commentsLoading ? (
               <View style={styles.loadingComments}>
@@ -486,38 +533,40 @@ export default function PostDetail() {
 
         <View style={styles.commentInputContainer}>
           {replyingTo && (
-            <View style={styles.replyingBanner}>
-              <Text style={styles.replyingText}>
-                Replying to <Text style={styles.replyingName}>{replyingTo.author?.full_name}</Text>
+            <View style={styles.replyingToContainer}>
+              <Text style={styles.replyingToLabel}>
+                Replying to <Text style={styles.replyingToName}>@{replyingTo.author?.full_name}</Text>
               </Text>
-              <Pressable onPress={() => setReplyingTo(null)} style={styles.cancelReplyButton}>
-                <Text style={styles.cancelReplyText}>Cancel</Text>
+              <Pressable onPress={() => setReplyingTo(null)}>
+                <Text style={styles.cancelReply}>Cancel</Text>
               </Pressable>
             </View>
           )}
           
-          <TextInput
-            placeholder={replyingTo ? "Tweet your reply" : "Add a comment..."}
-            style={styles.commentInput}
-            value={newComment}
-            onChangeText={setNewComment}
-            multiline
-            placeholderTextColor="#666666"
-          />
-          <Pressable 
-            onPress={handleSubmitComment} 
-            style={[
-              styles.commentButton,
-              (!newComment.trim() || isSubmitting) && styles.commentButtonDisabled
-            ]}
-            disabled={!newComment.trim() || isSubmitting}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Send size={20} color="#FFFFFF" />
-            )}
-          </Pressable>
+          <View style={styles.commentInputRow}>
+            <TextInput
+              style={styles.commentInput}
+              placeholder="Add a comment..."
+              value={newComment}
+              onChangeText={setNewComment}
+              multiline
+              editable={!isSubmitting}
+            />
+            <Pressable 
+              onPress={handleSubmitComment} 
+              disabled={!newComment.trim() || isSubmitting}
+              style={[
+                styles.sendButton, 
+                (!newComment.trim() || isSubmitting) && styles.sendButtonDisabled
+              ]}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Send size={20} color="#FFFFFF" />
+              )}
+            </Pressable>
+          </View>
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -835,7 +884,7 @@ const styles = StyleSheet.create({
   replyingToName: {
     color: '#0066CC',
   },
-  replyingBanner: {
+  replyingToContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -846,22 +895,30 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 12,
     marginBottom: -8,
   },
-  replyingText: {
+  replyingToLabel: {
     fontSize: 14,
     color: '#666666',
     fontFamily: 'Inter_400Regular',
   },
-  replyingName: {
-    color: '#0066CC',
-    fontFamily: 'Inter_500Medium',
-  },
-  cancelReplyButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  cancelReplyText: {
+  cancelReply: {
     fontSize: 14,
     color: '#0066CC',
     fontFamily: 'Inter_500Medium',
+  },
+  commentInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sendButton: {
+    backgroundColor: '#0066CC',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  sendButtonDisabled: {
+    backgroundColor: '#A9C2D9',
   },
 }); 

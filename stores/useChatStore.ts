@@ -31,7 +31,7 @@ interface Chat {
   created_at: string;
   updated_at: string;
   last_message_at: string;
-  last_message?: string;
+  last_message?: string | null;
   unread_count: number;
   other_user?: {
     full_name: string;
@@ -71,6 +71,7 @@ interface ChatState {
   muteChat: (chatId: string) => Promise<void>;
   unmuteChat: (chatId: string) => Promise<void>;
   deleteChat: (chatId: string) => Promise<void>;
+  clearChat: (chatId: string) => Promise<void>;
   cleanup: () => void;
 }
 
@@ -330,6 +331,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   deleteChat: async (chatId: string) => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
       const { error } = await supabase
         .from('chats')
         .delete()
@@ -337,8 +341,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       if (error) throw error;
 
-      set(state => ({
-        chats: state.chats.filter(chat => chat.id !== chatId)
+      set((state) => ({
+        chats: state.chats.filter((chat) => chat.id !== chatId),
+        messages: state.messages.filter((message) => message.chat_id !== chatId)
       }));
     } catch (error) {
       set({ error: handleSupabaseError(error) });
@@ -765,5 +770,48 @@ export const useChatStore = create<ChatState>((set, get) => ({
       currentChat: null,
       messages: [],
     });
+  },
+
+  clearChat: async (chatId: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Delete all messages in the chat
+      const { error } = await supabase
+        .from('chat_messages')
+        .delete()
+        .eq('chat_id', chatId);
+
+      if (error) throw error;
+
+      // Update the last_message field to be null
+      const { error: updateError } = await supabase
+        .from('chats')
+        .update({
+          last_message: null,
+          last_message_at: new Date().toISOString() // Keep the chat in the same position in the list
+        })
+        .eq('id', chatId);
+
+      if (updateError) throw updateError;
+
+      // Update local state
+      set((state) => ({
+        chats: state.chats.map((chat) => 
+          chat.id === chatId 
+            ? { ...chat, last_message: null } 
+            : chat
+        ),
+        messages: state.messages.filter((message) => message.chat_id !== chatId)
+      }));
+      
+      // If this is the current chat, clear its messages
+      if (get().currentChat?.id === chatId) {
+        set({ messages: [] });
+      }
+    } catch (error) {
+      set({ error: handleSupabaseError(error) });
+    }
   },
 }));

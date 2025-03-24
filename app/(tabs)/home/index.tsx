@@ -1,22 +1,45 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TextInput, Pressable, FlatList, RefreshControl, ActivityIndicator, Animated } from 'react-native';
-import { Link } from 'expo-router';
-import { Heart, MessageCircle, Repeat2, Bookmark, Share2, Search, TrendingUp, Plus } from 'lucide-react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TextInput, Pressable, FlatList, RefreshControl, ActivityIndicator, Animated, Alert, Modal, Dimensions, StatusBar, Platform, TouchableOpacity } from 'react-native';
+import { Link, useRouter } from 'expo-router';
+import { Heart, MessageCircle, Repeat2, Send, Search, TrendingUp, Plus, Trash2, Bookmark, ChevronRight, Sparkles, Flag, Edit2, Share } from 'lucide-react-native';
 import { useFeedStore, Post } from '@/stores/useFeedStore';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { ErrorMessage } from '@/components/ErrorMessage';
+import { supabase } from '@/lib/supabase';
+import { LinearGradient } from 'expo-linear-gradient';
 
-// Mock LinearGradient component to avoid dependency on expo-linear-gradient
-const MockLinearGradient = ({ style, children }: any) => {
-  return <View style={[{ backgroundColor: '#f0f0f0' }, style]}>{children}</View>;
-};
+const { width, height } = Dimensions.get('window');
+
+// Replace the mock LinearGradient with the real one
+const MockLinearGradient = LinearGradient;
 
 // Memoize PostCard to prevent unnecessary re-renders
-const PostCard = React.memo(({ post }: { post: Post }) => {
-  const { likePost, repostPost } = useFeedStore();
+const PostCard = React.memo(({ post, onOptionPress }: { post: Post, onOptionPress: () => void }) => {
+  const { likePost, repostPost, deletePost } = useFeedStore();
   const [isLiking, setIsLiking] = useState(false);
   const [isReposting, setIsReposting] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [isCurrentUser, setIsCurrentUser] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const router = useRouter();
 
+  // Check if current user is the author of the post
+  useEffect(() => {
+    const checkCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && post.author_id === user.id) {
+        setIsCurrentUser(true);
+      }
+    };
+    
+    checkCurrentUser();
+  }, [post.author_id]);
+  
+  // Ensure we have a valid comments_count
+  const commentsCount = typeof post.comments_count === 'number' ? post.comments_count : 0;
+  
+  console.log(`Post ${post.id} comments count:`, commentsCount);
+  
   const handleLike = useCallback(async () => {
     if (isLiking) return;
     setIsLiking(true);
@@ -41,77 +64,180 @@ const PostCard = React.memo(({ post }: { post: Post }) => {
     }
   }, [post.id, isReposting, repostPost]);
 
+  const handleDeletePost = useCallback(async () => {
+    if (isDeleting) return;
+    
+    Alert.alert(
+      "Delete Post",
+      "Are you sure you want to delete this post?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            setIsDeleting(true);
+            try {
+              const success = await deletePost(post.id);
+              if (!success) {
+                Alert.alert("Error", "Failed to delete post. Please try again.");
+              }
+            } catch (error) {
+              console.error('Error deleting post:', error);
+              Alert.alert("Error", "Failed to delete post. Please try again.");
+            } finally {
+              setIsDeleting(false);
+              setMenuVisible(false);
+            }
+          }
+        }
+      ]
+    );
+  }, [post.id, deletePost, isDeleting]);
+
+  // Format timestamp
+  const formattedTime = useMemo(() => {
+    const postDate = new Date(post.created_at);
+    const now = new Date();
+    const diffInHours = Math.floor((now.getTime() - postDate.getTime()) / (1000 * 60 * 60));
+    
+    if (diffInHours < 1) {
+      return 'Just now';
+    } else if (diffInHours < 24) {
+      return `${diffInHours}h`;
+    } else {
+      return `${Math.floor(diffInHours / 24)}d`;
+    }
+  }, [post.created_at]);
+
   return (
     <View style={styles.postCard}>
-      <View style={styles.postHeader}>
-        <Image 
-          source={{ 
-            uri: post.author?.avatar_url || 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400'
-          }} 
-          style={styles.avatar} 
-        />
-        <View style={styles.authorInfo}>
-          <View style={styles.nameRow}>
-            <Text style={styles.authorName}>{post.author?.full_name}</Text>
-            <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedText}>✓</Text>
-            </View>
+      <View style={styles.postContainer}>
+        {/* Left side with avatar and vertical line */}
+        <View style={styles.leftColumn}>
+          <Image 
+            source={{ 
+              uri: post.author?.avatar_url || 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400'
+            }} 
+            style={styles.avatar} 
+          />
+          <View style={styles.verticalLine} />
+        </View>
+        
+        {/* Right side with post content */}
+        <View style={styles.rightColumn}>
+          {/* Author info */}
+          <View style={styles.authorRow}>
+            <Text style={styles.authorName}>
+              {post.author?.full_name}
+            </Text>
+            <View style={styles.spacer} />
+            <Text style={styles.timestamp}>{formattedTime}</Text>
+            <Pressable 
+              style={styles.moreButton} 
+              onPress={() => setMenuVisible(true)}
+            >
+              <Text style={styles.moreButtonText}>•••</Text>
+            </Pressable>
           </View>
-          <Text style={styles.authorSpecialty}>{post.author?.specialty}</Text>
-          <Text style={styles.timestamp}>
-            {new Date(post.created_at).toLocaleDateString()}
-          </Text>
-        </View>
-      </View>
 
-      <Text style={styles.postContent}>{post.content}</Text>
-      
-      {post.media_url?.map((url, index) => (
-        <Image 
-          key={index}
-          source={{ uri: url }} 
-          style={styles.postImage}
-          resizeMode="cover"
-        />
-      ))}
-
-      {post.hashtags && post.hashtags.length > 0 && (
-        <View style={styles.hashtags}>
-          {post.hashtags.map((tag) => (
-            <Text key={tag} style={styles.hashtag}>#{tag}</Text>
+          {/* Post content */}
+          <Text style={styles.postContent}>{post.content}</Text>
+          
+          {/* Post media */}
+          {post.media_url?.map((url, index) => (
+            <Image 
+              key={index}
+              source={{ uri: url }} 
+              style={styles.postImage}
+              resizeMode="cover"
+            />
           ))}
+
+          {/* Hashtags */}
+          {post.hashtags && post.hashtags.length > 0 && (
+            <View style={styles.hashtags}>
+              {post.hashtags.map((tag) => (
+                <Text key={tag} style={styles.hashtag}>#{tag}</Text>
+              ))}
+            </View>
+          )}
+
+          {/* Engagement actions */}
+          <View style={styles.engagement}>
+            <Pressable onPress={handleLike}>
+              <Heart 
+                size={20} 
+                color={post.has_liked ? '#FF3040' : '#000000'} 
+                fill={post.has_liked ? '#FF3040' : 'transparent'} 
+              />
+            </Pressable>
+
+            <Link href={`/home/post/${post.id}`} asChild>
+              <Pressable>
+                <MessageCircle size={20} color="#000000" />
+              </Pressable>
+            </Link>
+
+            <Pressable onPress={handleRepost}>
+              <Repeat2 
+                size={20} 
+                color={post.has_reposted ? '#22C55E' : '#000000'} 
+              />
+            </Pressable>
+
+            <Pressable>
+              <Send size={20} color="#000000" />
+            </Pressable>
+          </View>
+
+          {/* Engagement counts */}
+          <View style={styles.engagementInfo}>
+            <Text style={styles.engagementText}>
+              {commentsCount === 1 
+                ? '1 reply' 
+                : `${commentsCount} replies`} • {post.likes_count || 0} likes
+            </Text>
+          </View>
         </View>
-      )}
-
-      <View style={styles.engagement}>
-        <Pressable onPress={handleLike} style={styles.engagementButton}>
-          <Heart 
-            size={20} 
-            color={post.has_liked ? '#FF4D4D' : '#666666'} 
-            fill={post.has_liked ? '#FF4D4D' : 'transparent'} 
-          />
-          <Text style={styles.engagementText}>{post.likes_count}</Text>
-        </Pressable>
-
-        <Link href={`/home/post/${post.id}`} asChild>
-          <Pressable style={styles.engagementButton}>
-            <MessageCircle size={20} color="#666666" />
-            <Text style={styles.engagementText}>{post.comments_count}</Text>
-          </Pressable>
-        </Link>
-
-        <Pressable onPress={handleRepost} style={styles.engagementButton}>
-          <Repeat2 
-            size={20} 
-            color={post.has_reposted ? '#22C55E' : '#666666'} 
-          />
-          <Text style={styles.engagementText}>{post.reposts_count}</Text>
-        </Pressable>
-
-        <Pressable style={styles.engagementButton}>
-          <Share2 size={20} color="#666666" />
-        </Pressable>
       </View>
+
+      {/* Post menu modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={menuVisible}
+        onRequestClose={() => setMenuVisible(false)}
+      >
+        <Pressable 
+          style={styles.modalOverlay} 
+          onPress={() => setMenuVisible(false)}
+        >
+          <View style={styles.menuContainer}>
+            {isCurrentUser && (
+              <Pressable 
+                style={styles.menuItem}
+                onPress={handleDeletePost}
+                disabled={isDeleting}
+              >
+                <Trash2 size={20} color="#FF3040" />
+                <Text style={styles.menuItemTextDelete}>
+                  {isDeleting ? "Deleting..." : "Delete Post"}
+                </Text>
+              </Pressable>
+            )}
+            <Pressable 
+              style={styles.menuItem}
+              onPress={() => setMenuVisible(false)}
+            >
+              <Text style={styles.menuItemText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 });
@@ -173,49 +299,45 @@ const Shimmer = () => {
 // Skeleton loader component for posts
 const PostSkeleton = () => (
   <View style={styles.postCard}>
-    <View style={styles.postHeader}>
-      <View style={[styles.avatar, styles.skeleton]}>
-        <Shimmer />
+    <View style={styles.postContainer}>
+      <View style={styles.leftColumn}>
+        <View style={[styles.avatar, styles.skeleton]}>
+          <Shimmer />
+        </View>
+        <View style={[styles.verticalLine, { backgroundColor: '#E5E5E5' }]} />
       </View>
-      <View style={styles.authorInfo}>
-        <View style={[styles.nameSkeleton, styles.skeleton]}>
+      
+      <View style={styles.rightColumn}>
+        <View style={styles.authorRow}>
+          <View style={[styles.nameSkeleton, styles.skeleton]}>
+            <Shimmer />
+          </View>
+          <View style={styles.spacer} />
+          <View style={[styles.timestampSkeleton, styles.skeleton]}>
+            <Shimmer />
+          </View>
+        </View>
+        
+        <View style={[styles.contentSkeleton, styles.skeleton]}>
           <Shimmer />
         </View>
-        <View style={[styles.specialtySkeleton, styles.skeleton]}>
+        <View style={[styles.contentSkeletonShort, styles.skeleton]}>
           <Shimmer />
         </View>
-        <View style={[styles.timestampSkeleton, styles.skeleton]}>
-          <Shimmer />
-        </View>
-      </View>
-    </View>
-    
-    <View style={[styles.contentSkeleton, styles.skeleton]}>
-      <Shimmer />
-    </View>
-    <View style={[styles.contentSkeletonShort, styles.skeleton]}>
-      <Shimmer />
-    </View>
-    
-    <View style={styles.engagement}>
-      <View style={styles.engagementButton}>
-        <View style={[styles.iconSkeleton, styles.skeleton]}>
-          <Shimmer />
-        </View>
-      </View>
-      <View style={styles.engagementButton}>
-        <View style={[styles.iconSkeleton, styles.skeleton]}>
-          <Shimmer />
-        </View>
-      </View>
-      <View style={styles.engagementButton}>
-        <View style={[styles.iconSkeleton, styles.skeleton]}>
-          <Shimmer />
-        </View>
-      </View>
-      <View style={styles.engagementButton}>
-        <View style={[styles.iconSkeleton, styles.skeleton]}>
-          <Shimmer />
+        
+        <View style={styles.engagement}>
+          <View style={[styles.iconSkeleton, styles.skeleton]}>
+            <Shimmer />
+          </View>
+          <View style={[styles.iconSkeleton, styles.skeleton]}>
+            <Shimmer />
+          </View>
+          <View style={[styles.iconSkeleton, styles.skeleton]}>
+            <Shimmer />
+          </View>
+          <View style={[styles.iconSkeleton, styles.skeleton]}>
+            <Shimmer />
+          </View>
         </View>
       </View>
     </View>
@@ -238,12 +360,23 @@ export default function Feed() {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [firstLoad, setFirstLoad] = useState(true);
+  const [activeTab, setActiveTab] = useState('Threads');
+  const [showOptions, setShowOptions] = useState(false);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const router = useRouter();
+  
+  // Animation values
+  const headerHeight = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  const translateY = useRef(new Animated.Value(30)).current;
+  const heartBeat = useRef(new Animated.Value(1)).current;
 
   // Initial data fetch - will use cache if available
   useEffect(() => {
     const loadInitialData = async () => {
       await Promise.all([
-        fetchPosts(),
+        fetchPosts({ following: activeTab === 'Following' }),
         fetchTrendingHashtags()
       ]);
       // Set firstLoad to false after initial data fetch
@@ -251,31 +384,104 @@ export default function Feed() {
     };
     
     loadInitialData();
+  }, [activeTab]);
+  
+  // Start animations
+  useEffect(() => {
+    // Start header animation
+    Animated.timing(headerHeight, {
+      toValue: 1,
+      duration: 800,
+      useNativeDriver: false,
+    }).start();
+    
+    // Animate content fade in and scale
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    
+    // Heart animation
+    const pulseHeart = Animated.loop(
+      Animated.sequence([
+        Animated.timing(heartBeat, {
+          toValue: 1.15,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(heartBeat, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.delay(800),
+      ])
+    );
+    
+    pulseHeart.start();
+    
+    return () => {
+      pulseHeart.stop();
+    };
   }, []);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
       await Promise.all([
-        refreshPosts(), // Force refresh
+        refreshPosts({ following: activeTab === 'Following' }), // Force refresh with correct filter
         fetchTrendingHashtags()
       ]);
     } finally {
       setRefreshing(false);
     }
-  }, [refreshPosts, fetchTrendingHashtags]);
+  }, [refreshPosts, fetchTrendingHashtags, activeTab]);
 
   const handleLoadMore = useCallback(() => {
     if (!isLoadingMore && hasMorePosts) {
-      loadMorePosts();
+      loadMorePosts({ following: activeTab === 'Following' });
     }
-  }, [isLoadingMore, hasMorePosts, loadMorePosts]);
+  }, [isLoadingMore, hasMorePosts, loadMorePosts, activeTab]);
 
   const handleSearch = useCallback(async (query: string) => {
     setSearchQuery(query);
     // Implement search functionality
   }, []);
   
+  // Handler for tab change
+  const handleTabChange = useCallback(async (tab: string) => {
+    setActiveTab(tab);
+    setFirstLoad(true);
+    await fetchPosts({ 
+      forceRefresh: true, 
+      following: tab === 'Following'
+    });
+    setFirstLoad(false);
+  }, [fetchPosts]);
+  
+  const handleOptionPress = (post: Post) => {
+    setSelectedPost(post);
+    setShowOptions(true);
+  };
+
+  const interpolatedHeaderHeight = headerHeight.interpolate({
+    inputRange: [0, 1],
+    outputRange: [70, Platform.OS === 'ios' ? 120 : 100]
+  });
+
   // Render footer for FlatList (loading indicator when loading more posts)
   const renderFooter = useMemo(() => {
     if (!isLoadingMore) return null;
@@ -294,7 +500,7 @@ export default function Feed() {
       <>
         <View style={styles.trendingSection}>
           <View style={styles.trendingHeader}>
-            <TrendingUp size={20} color="#1A1A1A" />
+            <TrendingUp size={20} color="#0066CC" />
             <Text style={styles.trendingTitle}>Trending Topics</Text>
           </View>
           <ScrollView
@@ -319,7 +525,7 @@ export default function Feed() {
     <View>
       <View style={styles.trendingSection}>
         <View style={styles.trendingHeader}>
-          <TrendingUp size={20} color="#1A1A1A" />
+          <TrendingUp size={20} color="#0066CC" />
           <Text style={styles.trendingTitle}>Trending Topics</Text>
         </View>
         <ScrollView
@@ -347,38 +553,104 @@ export default function Feed() {
     
     return (
       <View style={styles.emptyState}>
-        <Text style={styles.emptyStateText}>No posts yet</Text>
+        <Text style={styles.emptyStateText}>
+          {activeTab === 'Following' ? 'No posts from people you follow' : 'No posts yet'}
+        </Text>
         <Text style={styles.emptyStateSubtext}>
-          Follow doctors or create your first post
+          {activeTab === 'Following' 
+            ? 'Follow some doctors to see their posts here'
+            : 'Follow doctors or create your first post'
+          }
         </Text>
       </View>
     );
-  }, [firstLoad, isLoading, renderPlaceholderContent]);
+  }, [firstLoad, isLoading, renderPlaceholderContent, activeTab]);
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Medical Feed</Text>
-        <Link href="/home/create" asChild>
-          <Pressable style={styles.newButton}>
-            <Plus size={20} color="#FFFFFF" />
-            <Text style={styles.newButtonText}>New Post</Text>
-          </Pressable>
-        </Link>
+      <StatusBar barStyle="light-content" />
+      
+      {/* Background Gradient */}
+      <View style={styles.backgroundContainer}>
+        <LinearGradient
+          colors={['#062454', '#0066CC']}
+          style={styles.headerGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
+        
+        {/* Decorative elements */}
+        <View style={styles.decorativeCircle1} />
+        <View style={styles.decorativeCircle2} />
+        <View style={styles.decorativeLine} />
       </View>
-
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBar}>
-          <Search size={20} color="#666666" />
-          <TextInput
-            placeholder="Search posts, doctors, or topics..."
-            style={styles.searchInput}
-            value={searchQuery}
-            onChangeText={handleSearch}
-            placeholderTextColor="#666666"
-          />
+      
+      {/* Animated Header */}
+      <Animated.View 
+        style={[
+          styles.animatedHeader,
+          { height: interpolatedHeaderHeight }
+        ]}
+      >
+        <View style={styles.logoContainer}>
+          <Animated.View 
+            style={[
+              styles.heartIcon,
+              { transform: [{ scale: heartBeat }] }
+            ]}
+          >
+            <Heart size={20} color="#fff" fill="#fff" />
+          </Animated.View>
+          <Text style={styles.title}>MEDICO</Text>
         </View>
-      </View>
+        
+        <Animated.View 
+          style={[
+            styles.searchBarContainer,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY }]
+            }
+          ]}
+        >
+          <View style={styles.searchBar}>
+            <Search size={16} color="#fff" style={styles.searchIcon} />
+            <TextInput
+              placeholder="Search topics, hashtags, doctors..."
+              placeholderTextColor="rgba(255, 255, 255, 0.6)"
+              style={styles.searchInput}
+              value={searchQuery}
+              onChangeText={handleSearch}
+            />
+          </View>
+        </Animated.View>
+      </Animated.View>
+
+      {/* Tabs */}
+      <Animated.View 
+        style={[
+          styles.tabsContainer,
+          {
+            opacity: fadeAnim,
+            transform: [{ scale: scaleAnim }]
+          }
+        ]}
+      >
+        <TouchableOpacity 
+          style={[styles.tab, activeTab === 'Threads' && styles.activeTab]} 
+          onPress={() => handleTabChange('Threads')}
+        >
+          <Text style={[styles.tabText, activeTab === 'Threads' && styles.activeTabText]}>Threads</Text>
+          {activeTab === 'Threads' && <View style={styles.activeTabIndicator} />}
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.tab, activeTab === 'Following' && styles.activeTab]} 
+          onPress={() => handleTabChange('Following')}
+        >
+          <Text style={[styles.tabText, activeTab === 'Following' && styles.activeTabText]}>Following</Text>
+          {activeTab === 'Following' && <View style={styles.activeTabIndicator} />}
+        </TouchableOpacity>
+      </Animated.View>
 
       {error && (
         <ErrorMessage 
@@ -387,33 +659,106 @@ export default function Feed() {
         />
       )}
 
-      <FlatList
-        data={posts}
-        renderItem={({ item }) => <PostCard post={item} />}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.feed}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-        }
-        onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.5}
-        ListFooterComponent={renderFooter}
-        // Performance optimizations
-        removeClippedSubviews={true}
-        maxToRenderPerBatch={5}
-        windowSize={10}
-        initialNumToRender={5}
-        updateCellsBatchingPeriod={50}
-        ListHeaderComponent={ListHeaderComponent}
-        ListEmptyComponent={ListEmptyComponent}
-      />
+      <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
+        <FlatList
+          data={posts}
+          renderItem={({ item }) => <PostCard post={item} onOptionPress={() => handleOptionPress(item)} />}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.feed}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl 
+              refreshing={refreshing} 
+              onRefresh={handleRefresh} 
+              tintColor="#0066CC"
+            />
+          }
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={renderFooter}
+          // Performance optimizations
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={5}
+          windowSize={10}
+          initialNumToRender={5}
+          updateCellsBatchingPeriod={50}
+          ListHeaderComponent={activeTab === 'Threads' ? ListHeaderComponent : null}
+          ListEmptyComponent={ListEmptyComponent}
+        />
+      </Animated.View>
 
       <Link href="/home/create" asChild>
         <Pressable style={styles.fab}>
-          <Plus size={24} color="#FFFFFF" />
+          <LinearGradient
+            colors={['#1a82ff', '#0066CC']}
+            style={styles.fabGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <Plus size={24} color="#FFFFFF" />
+          </LinearGradient>
         </Pressable>
       </Link>
+
+      {/* Post Options Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showOptions}
+        onRequestClose={() => setShowOptions(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowOptions(false)}
+        >
+          <View style={styles.menuContainer}>
+            <TouchableOpacity 
+              style={styles.menuItem}
+              onPress={() => {
+                setShowOptions(false);
+                // Add share functionality
+              }}
+            >
+              <Share size={20} color="#0066CC" />
+              <Text style={styles.menuItemText}>Share</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.menuItem}
+              onPress={() => {
+                setShowOptions(false);
+                // Navigate to edit post screen
+              }}
+            >
+              <Edit2 size={20} color="#0066CC" />
+              <Text style={styles.menuItemText}>Edit</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.menuItem}
+              onPress={() => {
+                setShowOptions(false);
+                // Add delete functionality
+              }}
+            >
+              <Trash2 size={20} color="#FF3040" />
+              <Text style={styles.menuItemTextDelete}>Delete</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.menuItem}
+              onPress={() => {
+                setShowOptions(false);
+                // Add report functionality
+              }}
+            >
+              <Flag size={20} color="#0066CC" />
+              <Text style={styles.menuItemText}>Report</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -421,58 +766,160 @@ export default function Feed() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#f8fafc',
   },
-  header: {
-    padding: 16,
+  backgroundContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: Platform.OS === 'ios' ? 200 : 180,
+    zIndex: 0,
+    overflow: 'hidden',
+  },
+  headerGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '100%',
+  },
+  decorativeCircle1: {
+    position: 'absolute',
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    top: -120,
+    right: -100,
+  },
+  decorativeCircle2: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    top: 80,
+    left: -80,
+  },
+  decorativeLine: {
+    position: 'absolute',
+    width: 120,
+    height: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    bottom: 40,
+    right: 40,
+    transform: [{ rotate: '30deg' }],
+  },
+  animatedHeader: {
+    width: '100%',
+    paddingTop: Platform.OS === 'ios' ? 50 : 30,
+    paddingHorizontal: 16,
+    zIndex: 2,
+  },
+  logoContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
+    justifyContent: 'center',
+    paddingBottom: 12,
+  },
+  heartIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#ff6b6b',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
   title: {
     fontSize: 24,
-    fontFamily: 'Inter_600SemiBold',
-    color: '#1A1A1A',
-  },
-  newButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0066CC',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 8,
-  },
-  newButtonText: {
+    fontFamily: 'Inter_700Bold',
     color: '#FFFFFF',
-    fontFamily: 'Inter_500Medium',
-    fontSize: 14,
+    letterSpacing: 1,
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
-  searchContainer: {
-    padding: 16,
-    backgroundColor: '#FFFFFF',
+  searchBarContainer: {
+    marginTop: 8,
+    marginBottom: 16,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0F2F5',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 44,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  searchIcon: {
+    marginRight: 10,
   },
   searchInput: {
     flex: 1,
-    marginLeft: 8,
-    fontSize: 16,
+    height: 24,
+    color: '#FFFFFF',
+    fontSize: 15,
     fontFamily: 'Inter_400Regular',
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    marginTop: Platform.OS === 'ios' ? 120 : 100,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 1,
+    zIndex: 3,
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 16,
+    position: 'relative',
+  },
+  activeTab: {
+    borderBottomWidth: 0,
+  },
+  tabText: {
+    fontSize: 15,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#6B7280',
+  },
+  activeTabText: {
+    color: '#0066CC',
+  },
+  activeTabIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    width: '50%',
+    height: 3,
+    backgroundColor: '#0066CC',
+    borderRadius: 1.5,
   },
   trendingSection: {
     backgroundColor: '#FFFFFF',
-    paddingVertical: 12,
+    paddingVertical: 16,
     marginBottom: 8,
+    borderRadius: 12,
+    marginHorizontal: 8,
+    marginTop: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   trendingHeader: {
     flexDirection: 'row',
@@ -492,11 +939,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   trendingHashtag: {
-    backgroundColor: '#F0F2F5',
+    backgroundColor: 'rgba(0, 102, 204, 0.08)',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 20,
     marginRight: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 102, 204, 0.15)',
   },
   trendingHashtagText: {
     fontSize: 14,
@@ -506,79 +955,81 @@ const styles = StyleSheet.create({
   trendingHashtagCount: {
     fontSize: 12,
     fontFamily: 'Inter_400Regular',
-    color: '#666666',
+    color: '#6B7280',
     marginTop: 2,
   },
   feed: {
-    padding: 16,
-    gap: 16,
+    padding: 8,
   },
   postCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  postHeader: {
-    flexDirection: 'row',
+    borderRadius: 16,
     marginBottom: 12,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+    overflow: 'hidden',
   },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  postContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  leftColumn: {
+    alignItems: 'center',
     marginRight: 12,
   },
-  authorInfo: {
+  rightColumn: {
     flex: 1,
   },
-  nameRow: {
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: 'rgba(0, 102, 204, 0.2)',
+  },
+  verticalLine: {
+    width: 2,
+    flex: 1,
+    backgroundColor: 'rgba(0, 102, 204, 0.1)',
+    marginVertical: 4,
+  },
+  authorRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 6,
   },
   authorName: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: 'Inter_600SemiBold',
-    color: '#1A1A1A',
-    marginRight: 4,
+    color: '#1e293b',
   },
-  verifiedBadge: {
-    backgroundColor: '#0066CC',
-    borderRadius: 10,
-    width: 16,
-    height: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  verifiedText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  authorSpecialty: {
-    fontSize: 14,
-    color: '#0066CC',
-    fontFamily: 'Inter_500Medium',
-    marginTop: 2,
+  spacer: {
+    flex: 1,
   },
   timestamp: {
-    fontSize: 12,
-    color: '#666666',
+    fontSize: 14,
     fontFamily: 'Inter_400Regular',
-    marginTop: 2,
+    color: '#6B7280',
+    marginRight: 8,
+  },
+  moreButton: {
+    padding: 4,
+  },
+  moreButtonText: {
+    fontFamily: 'Inter_600SemiBold',
+    color: '#6B7280',
+    fontSize: 12,
+    transform: [{ rotate: '90deg' }],
   },
   postContent: {
-    fontSize: 16,
-    color: '#1A1A1A',
+    fontSize: 15,
+    color: '#1e293b',
     fontFamily: 'Inter_400Regular',
-    lineHeight: 24,
+    lineHeight: 22,
     marginBottom: 12,
   },
   postImage: {
@@ -600,55 +1051,74 @@ const styles = StyleSheet.create({
   },
   engagement: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingTop: 12,
+    gap: 20,
+    marginTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#E5E5E5',
+    borderTopColor: 'rgba(0, 102, 204, 0.1)',
+    paddingTop: 12,
   },
-  engagementButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    padding: 4,
+  engagementInfo: {
+    marginTop: 6,
   },
   engagementText: {
-    fontSize: 14,
-    color: '#666666',
+    fontSize: 13,
+    color: '#6B7280',
     fontFamily: 'Inter_400Regular',
   },
   fab: {
     position: 'absolute',
-    right: 16,
-    bottom: 16,
+    right: 20,
+    bottom: 20,
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#0066CC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
+    shadowColor: '#0066CC',
     shadowOffset: {
       width: 0,
       height: 4,
     },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
-    elevation: 5,
+    elevation: 8,
+    overflow: 'hidden',
+  },
+  fabGradient: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyState: {
     padding: 24,
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginTop: 24,
+    marginHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    paddingVertical: 40,
   },
   emptyStateText: {
     fontSize: 18,
     fontFamily: 'Inter_600SemiBold',
-    color: '#1A1A1A',
-    marginBottom: 8,
+    color: '#1e293b',
+    marginBottom: 12,
+    textAlign: 'center',
   },
   emptyStateSubtext: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: 'Inter_400Regular',
-    color: '#666666',
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 22,
   },
   skeleton: {
     backgroundColor: '#E5E5E5',
@@ -667,16 +1137,16 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   timestampSkeleton: {
-    width: 60,
-    height: 10,
+    width: 40,
+    height: 12,
   },
   contentSkeleton: {
-    height: 20,
+    height: 18,
     marginBottom: 8,
     width: '100%',
   },
   contentSkeletonShort: {
-    height: 20,
+    height: 18,
     marginBottom: 12,
     width: '70%',
   },
@@ -699,8 +1169,44 @@ const styles = StyleSheet.create({
   },
   loadingMoreText: {
     fontSize: 14,
-    color: '#666666',
+    color: '#0066CC',
     marginLeft: 8,
     fontFamily: 'Inter_400Regular',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuContainer: {
+    width: '80%',
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 16,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 102, 204, 0.1)',
+  },
+  menuItemText: {
+    fontSize: 16,
+    fontFamily: 'Inter_500Medium',
+    color: '#1e293b',
+    marginLeft: 12,
+  },
+  menuItemTextDelete: {
+    fontSize: 16,
+    fontFamily: 'Inter_500Medium',
+    color: '#FF3040',
+    marginLeft: 12,
   },
 });

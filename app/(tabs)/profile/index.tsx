@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   View, 
   Text, 
@@ -11,12 +11,15 @@ import {
   Dimensions, 
   Platform,
   StatusBar,
-  TouchableOpacity 
+  TouchableOpacity,
+  ImageBackground,
+  ActivityIndicator,
+  Easing
 } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useRouter, useFocusEffect } from 'expo-router';
 import { 
   Settings, 
-  CreditCard as Edit3, 
+  Edit,
   MapPin, 
   Building2, 
   Users, 
@@ -30,15 +33,47 @@ import {
   ChevronRight,
   Shield,
   Star,
-  Check
+  Check,
+  Hash,
+  Briefcase,
+  GraduationCap,
+  BookOpen,
+  Stethoscope,
+  Globe,
+  UserPlus,
+  HeartHandshake,
+  Calendar,
+  User as UserIcon,
+  Camera,
+  BarChart2,
+  CheckCircle2,
+  Bell,
+  ExternalLink,
+  CheckCircle,
+  HeartPulse,
+  Beaker,
+  Languages,
+  ChevronRight as ChevronRightIcon,
+  Plus,
+  Clock
 } from 'lucide-react-native';
 import { useProfileStore } from '@/stores/useProfileStore';
 import { useFeedStore } from '@/stores/useFeedStore';
+import { useNetworkStore } from '@/stores/useNetworkStore';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { LinearGradient } from 'expo-linear-gradient';
+import { WorkExperience, Education, Research, QualityImprovement, Profile } from '@/types/database';
 
 const { width, height } = Dimensions.get('window');
+
+// Add type definition for SuggestedDoctor
+interface SuggestedDoctor {
+  id: string;
+  full_name: string;
+  specialty: string;
+  avatar_url?: string;
+}
 
 const Achievement = ({ icon: Icon, label }: { icon: any; label: string }) => {
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
@@ -72,23 +107,32 @@ const Achievement = ({ icon: Icon, label }: { icon: any; label: string }) => {
   );
 };
 
-const StatBox = ({ label, value }: { label: string; value: string | number }) => (
-  <View style={styles.statBox}>
-    <Text style={styles.statValue}>{value}</Text>
-    <Text style={styles.statLabel}>{label}</Text>
-    <View style={styles.statIndicator} />
+const ProfileTag = ({ tag }: { tag: string }) => (
+  <View style={styles.tagItemWrapper}>
+    <LinearGradient
+      colors={['rgba(0, 102, 204, 0.08)', 'rgba(0, 145, 255, 0.12)']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.tagItem}
+    >
+      <Hash size={12} color="#0066CC" />
+      <Text style={styles.tagItemText}>{tag}</Text>
+    </LinearGradient>
   </View>
 );
 
-const ExpertiseTag = ({ label }: { label: string }) => (
-  <LinearGradient
-    colors={['#E5F0FF', '#D3E6FF']}
-    style={styles.expertiseTag}
-    start={{ x: 0, y: 0 }}
-    end={{ x: 1, y: 1 }}
-  >
-    <Text style={styles.expertiseText}>{label}</Text>
-  </LinearGradient>
+const SkillTag = ({ skill }: { skill: string }) => (
+  <View style={styles.skillItemWrapper}>
+    <LinearGradient
+      colors={['rgba(0, 102, 204, 0.08)', 'rgba(0, 145, 255, 0.12)']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.skillItem}
+    >
+      <Star size={12} color="#0066CC" />
+      <Text style={styles.skillItemText}>{skill}</Text>
+    </LinearGradient>
+  </View>
 );
 
 const PostCard = ({ post }: { post: any }) => {
@@ -172,10 +216,938 @@ const PostCard = ({ post }: { post: any }) => {
   );
 };
 
-export default function Profile() {
+// Component for Profile Header with Banner
+const ProfileHeader = ({ profile, onEditProfile }: { profile: Profile | null, onEditProfile: () => void }) => {
+  const defaultBanner = 'https://images.unsplash.com/photo-1628771065518-0d82f1938462?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3';
+  const translateY = useRef(new Animated.Value(20)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  
+  useEffect(() => {
+    // Animate the profile header elements with staggered timing
+    Animated.stagger(100, [
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      }),
+      Animated.spring(translateY, {
+        toValue: 0,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 7,
+        tension: 50,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+  
+  // Check if profile is a verified doctor
+  const isVerified = profile?.specialty && profile?.hospital;
+  
+  return (
+    <View style={styles.headerContainer}>
+      {/* Banner Section */}
+      <ImageBackground
+        source={{ uri: defaultBanner }}
+        style={styles.bannerImage}
+        imageStyle={styles.bannerImageStyle}
+      >
+        <LinearGradient
+          colors={['rgba(0,0,0,0)', 'rgba(0,20,50,0.8)']}
+          style={styles.bannerGradient}
+        >
+          <View style={styles.bannerContent}>
+            <TouchableOpacity 
+              style={styles.editProfileButton} 
+              onPress={onEditProfile}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={['#0066CC', '#0091FF']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.editProfileButtonGradient}
+              >
+                <Edit size={18} color="#FFFFFF" />
+                <Text style={styles.editButtonText}>Edit Profile</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+      </ImageBackground>
+      
+      {/* Profile Info Section */}
+      <Animated.View 
+        style={[
+          styles.profileContentContainer,
+          { 
+            opacity, 
+            transform: [
+              { translateY },
+              { scale: scaleAnim }
+            ] 
+          }
+        ]}
+      >
+        {/* Profile Image & Verification Badge */}
+        <View style={styles.profileImageContainer}>
+          <View style={styles.profileImageWrapper}>
+            {profile?.avatar_url ? (
+              <Image source={{ uri: profile.avatar_url }} style={styles.profileImage} />
+            ) : (
+              <LinearGradient
+                colors={['#0066CC', '#0091FF']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.profileImagePlaceholder}
+              >
+                <Text style={styles.profileImagePlaceholderText}>
+                  {profile?.full_name ? profile.full_name.charAt(0).toUpperCase() : 'M'}
+                </Text>
+              </LinearGradient>
+            )}
+            
+            {isVerified && (
+              <View style={styles.verifiedBadge}>
+                <LinearGradient
+                  colors={['#22C55E', '#10B981']}
+                  style={styles.verifiedBadgeGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <CheckCircle2 size={14} color="#FFFFFF" />
+                </LinearGradient>
+              </View>
+            )}
+          </View>
+        </View>
+        
+        {/* Doctor Info */}
+        <View style={styles.doctorInfoContainer}>
+          <Text style={styles.doctorName}>
+            {profile?.full_name || 'Complete Your Profile'}
+          </Text>
+          
+          <View style={styles.specialtyContainer}>
+            <Stethoscope size={16} color="#0066CC" />
+            <Text style={styles.specialtyText}>
+              {profile?.specialty || 'Add your specialty'}
+            </Text>
+          </View>
+          
+          <View style={styles.infoCardsContainer}>
+            {profile?.hospital && (
+              <View style={styles.infoCard}>
+                <LinearGradient
+                  colors={['rgba(0, 102, 204, 0.1)', 'rgba(0, 145, 255, 0.1)']}
+                  style={styles.infoCardGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Building2 size={16} color="#0066CC" />
+                  <Text style={styles.infoCardText}>{profile.hospital}</Text>
+                </LinearGradient>
+              </View>
+            )}
+            
+            {profile?.location && (
+              <View style={styles.infoCard}>
+                <LinearGradient
+                  colors={['rgba(0, 102, 204, 0.1)', 'rgba(0, 145, 255, 0.1)']}
+                  style={styles.infoCardGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <MapPin size={16} color="#0066CC" />
+                  <Text style={styles.infoCardText}>{profile.location}</Text>
+                </LinearGradient>
+              </View>
+            )}
+          </View>
+          
+          {/* Stats Section */}
+          <View style={styles.statsContainer}>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{profile?.posts_count || 0}</Text>
+              <Text style={styles.statLabel}>Posts</Text>
+            </View>
+            <View style={styles.statSeparator} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{profile?.followers_count || 0}</Text>
+              <Text style={styles.statLabel}>Followers</Text>
+            </View>
+            <View style={styles.statSeparator} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{profile?.following_count || 0}</Text>
+              <Text style={styles.statLabel}>Following</Text>
+            </View>
+          </View>
+        </View>
+        
+        {/* Bio Section */}
+        {profile?.bio && (
+          <View style={styles.bioContainer}>
+            <Text style={styles.bioLabel}>About</Text>
+            <Text style={styles.bioText}>{profile.bio}</Text>
+          </View>
+        )}
+      </Animated.View>
+    </View>
+  );
+};
+
+// Update WorkExperienceSection with improved animations and styling
+const WorkExperienceSection = ({ experiences }: { experiences: WorkExperience[] | undefined }) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(20)).current;
+  
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 1000,
+        delay: 300,
+        useNativeDriver: true,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 800,
+        delay: 300,
+        useNativeDriver: true,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      }),
+    ]).start();
+  }, []);
+  
+  if (!experiences || experiences.length === 0) return null;
+  
+  return (
+    <Animated.View 
+      style={[
+        styles.sectionContainer,
+        { opacity: fadeAnim, transform: [{ translateY }] }
+      ]}
+    >
+      <View style={styles.sectionHeader}>
+        <LinearGradient
+          colors={['#0066CC', '#0091FF']}
+          style={styles.sectionIconContainer}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <Briefcase size={16} color="#FFFFFF" />
+        </LinearGradient>
+        <Text style={styles.sectionTitle}>Work Experience</Text>
+      </View>
+      
+      <View style={styles.experienceList}>
+        {experiences.map((exp, index) => (
+          <View key={index} style={styles.experienceItem}>
+            <View style={styles.experienceDateContainer}>
+              <Text style={styles.experienceDate}>
+                {exp.start_date} - {exp.is_current ? 'Present' : exp.end_date}
+              </Text>
+            </View>
+            <View style={styles.experienceContent}>
+              <Text style={styles.experienceTitle}>{exp.title}</Text>
+              <Text style={styles.experienceOrg}>{exp.organization}</Text>
+              {exp.location && (
+                <View style={styles.experienceLocation}>
+                  <MapPin size={14} color="#64748b" />
+                  <Text style={styles.experienceLocationText}>{exp.location}</Text>
+                </View>
+              )}
+              {exp.description && (
+                <Text style={styles.experienceDescription}>{exp.description}</Text>
+              )}
+            </View>
+          </View>
+        ))}
+      </View>
+    </Animated.View>
+  );
+};
+
+// Update EducationSection with improved animations and styling
+const EducationSection = ({ education }: { education: Education[] | undefined }) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(20)).current;
+  
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 1000,
+        delay: 400,
+        useNativeDriver: true,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 800,
+        delay: 400,
+        useNativeDriver: true,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      }),
+    ]).start();
+  }, []);
+  
+  if (!education || education.length === 0) return null;
+  
+  return (
+    <Animated.View 
+      style={[
+        styles.sectionContainer,
+        { opacity: fadeAnim, transform: [{ translateY }] }
+      ]}
+    >
+      <View style={styles.sectionHeader}>
+        <LinearGradient
+          colors={['#0066CC', '#0091FF']}
+          style={styles.sectionIconContainer}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <GraduationCap size={16} color="#FFFFFF" />
+        </LinearGradient>
+        <Text style={styles.sectionTitle}>Education</Text>
+      </View>
+      
+      <View style={styles.educationList}>
+        {education.map((edu, index) => (
+          <View key={index} style={styles.educationItem}>
+            <View style={styles.educationDateContainer}>
+              <Text style={styles.educationDate}>
+                {edu.start_date} - {edu.is_current ? 'Present' : edu.end_date}
+              </Text>
+            </View>
+            <View style={styles.educationContent}>
+              <Text style={styles.educationDegree}>{edu.degree}</Text>
+              <Text style={styles.educationInstitution}>{edu.institution}</Text>
+              {edu.location && (
+                <View style={styles.educationLocation}>
+                  <MapPin size={14} color="#64748b" />
+                  <Text style={styles.educationLocationText}>{edu.location}</Text>
+                </View>
+              )}
+              {edu.description && (
+                <Text style={styles.educationDescription}>{edu.description}</Text>
+              )}
+            </View>
+          </View>
+        ))}
+      </View>
+    </Animated.View>
+  );
+};
+
+// Update the ResearchSection with animations and improved design
+const ResearchSection = ({ research }: { research: Research[] | undefined }) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(20)).current;
+  
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 1000,
+        delay: 500,
+        useNativeDriver: true,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 800,
+        delay: 500,
+        useNativeDriver: true,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      }),
+    ]).start();
+  }, []);
+  
+  if (!research || research.length === 0) return null;
+  
+  return (
+    <Animated.View 
+      style={[
+        styles.sectionContainer,
+        { opacity: fadeAnim, transform: [{ translateY }] }
+      ]}
+    >
+      <View style={styles.sectionHeader}>
+        <LinearGradient
+          colors={['#0066CC', '#0091FF']}
+          style={styles.sectionIconContainer}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <FileText size={16} color="#FFFFFF" />
+        </LinearGradient>
+        <Text style={styles.sectionTitle}>Research</Text>
+      </View>
+      
+      <View style={styles.researchList}>
+        {research.map((item, index) => (
+          <View key={index} style={styles.researchItem}>
+            <Text style={styles.researchTitle}>{item.title}</Text>
+            {item.journal && (
+              <Text style={styles.researchJournal}>{item.journal}</Text>
+            )}
+            {item.publication_date && (
+              <View style={styles.researchDate}>
+                <Calendar size={14} color="#64748b" />
+                <Text style={styles.researchDateText}>{item.publication_date}</Text>
+              </View>
+            )}
+            {item.description && (
+              <Text style={styles.researchDescription}>{item.description}</Text>
+            )}
+            {item.url && (
+              <TouchableOpacity style={styles.researchLink}>
+                <Text style={styles.researchLinkText}>View Publication</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ))}
+      </View>
+    </Animated.View>
+  );
+};
+
+// Update QualityImprovement section with animations and premium styling
+const QualityImprovementSection = ({ improvements }: { improvements: QualityImprovement[] | undefined }) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(20)).current;
+  
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 1000,
+        delay: 550,
+        useNativeDriver: true,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 800,
+        delay: 550,
+        useNativeDriver: true,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      }),
+    ]).start();
+  }, []);
+  
+  if (!improvements || improvements.length === 0) return null;
+  
+  return (
+    <Animated.View 
+      style={[
+        styles.sectionContainer,
+        { opacity: fadeAnim, transform: [{ translateY }] }
+      ]}
+    >
+      <View style={styles.sectionHeader}>
+        <LinearGradient
+          colors={['#0066CC', '#0091FF']}
+          style={styles.sectionIconContainer}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <BarChart2 size={16} color="#FFFFFF" />
+        </LinearGradient>
+        <Text style={styles.sectionTitle}>Quality Improvement</Text>
+      </View>
+      
+      <View style={styles.qiList}>
+        {improvements.map((item, index) => (
+          <View key={index} style={styles.qiItem}>
+            <Text style={styles.qiTitle}>{item.title}</Text>
+            {item.organization && (
+              <Text style={styles.qiOrganization}>{item.organization}</Text>
+            )}
+            {item.date && (
+              <View style={styles.qiDate}>
+                <Calendar size={14} color="#64748b" />
+                <Text style={styles.qiDateText}>{item.date}</Text>
+              </View>
+            )}
+            {item.description && (
+              <Text style={styles.qiDescription}>{item.description}</Text>
+            )}
+          </View>
+        ))}
+      </View>
+    </Animated.View>
+  );
+};
+
+// Update Interests section with animations and premium styling
+const InterestsSection = ({ interests }: { interests: string[] | undefined }) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(20)).current;
+  
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 1000,
+        delay: 600,
+        useNativeDriver: true,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 800,
+        delay: 600,
+        useNativeDriver: true,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      }),
+    ]).start();
+  }, []);
+  
+  if (!interests || interests.length === 0) return null;
+  
+  return (
+    <Animated.View 
+      style={[
+        styles.sectionContainer,
+        { opacity: fadeAnim, transform: [{ translateY }] }
+      ]}
+    >
+      <View style={styles.sectionHeader}>
+        <LinearGradient
+          colors={['#0066CC', '#0091FF']}
+          style={styles.sectionIconContainer}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <HeartHandshake size={16} color="#FFFFFF" />
+        </LinearGradient>
+        <Text style={styles.sectionTitle}>Interests</Text>
+      </View>
+      
+      <View style={styles.interestsList}>
+        {interests.map((interest, index) => (
+          <View key={index} style={styles.interestItemWrapper}>
+            <LinearGradient
+              colors={['rgba(0, 102, 204, 0.08)', 'rgba(0, 145, 255, 0.12)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.interestItem}
+            >
+              <HeartHandshake size={12} color="#0066CC" />
+              <Text style={styles.interestText}>{interest}</Text>
+            </LinearGradient>
+          </View>
+        ))}
+      </View>
+    </Animated.View>
+  );
+};
+
+// Update Languages section with animations and premium styling
+const LanguagesSection = ({ languages }: { languages: { name: string; proficiency: string }[] | undefined }) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(20)).current;
+  
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 1000,
+        delay: 650,
+        useNativeDriver: true,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 800,
+        delay: 650,
+        useNativeDriver: true,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      }),
+    ]).start();
+  }, []);
+  
+  if (!languages || languages.length === 0) return null;
+  
+  // Helper function to render proficiency indicator
+  const renderProficiencyIndicator = (proficiency: string) => {
+    const levels = {
+      native: 4,
+      fluent: 3,
+      conversational: 2,
+      basic: 1
+    };
+    
+    const level = levels[proficiency as keyof typeof levels] || 1;
+    
+    return (
+      <View style={styles.proficiencyIndicator}>
+        {[1, 2, 3, 4].map(i => (
+          <View 
+            key={i} 
+            style={[
+              styles.proficiencyDot, 
+              i <= level ? styles.proficiencyActive : styles.proficiencyInactive
+            ]} 
+          />
+        ))}
+      </View>
+    );
+  };
+  
+  return (
+    <Animated.View 
+      style={[
+        styles.sectionContainer,
+        { opacity: fadeAnim, transform: [{ translateY }] }
+      ]}
+    >
+      <View style={styles.sectionHeader}>
+        <LinearGradient
+          colors={['#0066CC', '#0091FF']}
+          style={styles.sectionIconContainer}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <Globe size={16} color="#FFFFFF" />
+        </LinearGradient>
+        <Text style={styles.sectionTitle}>Languages</Text>
+      </View>
+      
+      <View style={styles.languagesList}>
+        {languages.map((lang, index) => (
+          <View key={index} style={styles.languageItem}>
+            <Text style={styles.languageName}>{lang.name}</Text>
+            <View style={styles.languageProficiency}>
+              <Text style={styles.proficiencyLabel}>{lang.proficiency}</Text>
+              {renderProficiencyIndicator(lang.proficiency)}
+            </View>
+          </View>
+        ))}
+      </View>
+    </Animated.View>
+  );
+};
+
+// Update SuggestedConnectionsSection with animations and premium styling
+const SuggestedConnectionsSection = ({ suggestedDoctors }: { suggestedDoctors?: SuggestedDoctor[] }) => {
+  const { followDoctor } = useNetworkStore();
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(20)).current;
+  
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 1000,
+        delay: 700,
+        useNativeDriver: true,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 800,
+        delay: 700,
+        useNativeDriver: true,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      }),
+    ]).start();
+  }, []);
+  
+  if (!suggestedDoctors || suggestedDoctors.length === 0) return null;
+  
+  return (
+    <Animated.View 
+      style={[
+        styles.sectionContainer,
+        { opacity: fadeAnim, transform: [{ translateY }] }
+      ]}
+    >
+      <View style={styles.sectionHeader}>
+        <LinearGradient
+          colors={['#0066CC', '#0091FF']}
+          style={styles.sectionIconContainer}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <UserPlus size={16} color="#FFFFFF" />
+        </LinearGradient>
+        <Text style={styles.sectionTitle}>Suggested Connections</Text>
+      </View>
+      
+      <View style={styles.connectionsList}>
+        {suggestedDoctors.map((doctor: SuggestedDoctor, index: number) => (
+          <View key={index} style={styles.connectionItem}>
+            <Image 
+              source={{ uri: doctor.avatar_url || 'https://via.placeholder.com/50' }} 
+              style={styles.connectionAvatar} 
+            />
+            <View style={styles.connectionInfo}>
+              <Text style={styles.connectionName}>{doctor.full_name}</Text>
+              <Text style={styles.connectionTitle}>{doctor.specialty}</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.connectButton}
+              onPress={() => followDoctor(doctor.id)}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={['#0066CC', '#0091FF']}
+                style={styles.connectButtonGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <UserPlus size={16} color="#FFFFFF" />
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        ))}
+      </View>
+    </Animated.View>
+  );
+};
+
+// Update the SkillsSection with animations and improved design
+const SkillsSection = ({ skills }: { skills: string[] | undefined }) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(15)).current;
+  
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        delay: 250,
+        useNativeDriver: true,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 800,
+        delay: 250,
+        useNativeDriver: true,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      }),
+    ]).start();
+  }, []);
+  
+  if (!skills || skills.length === 0) return null;
+  
+  return (
+    <Animated.View 
+      style={[
+        styles.sectionContainer, 
+        { opacity: fadeAnim, transform: [{ translateY }] }
+      ]}
+    >
+      <View style={styles.sectionHeader}>
+        <LinearGradient
+          colors={['#0066CC', '#0091FF']}
+          style={styles.sectionIconContainer}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <Star size={16} color="#FFFFFF" />
+        </LinearGradient>
+        <Text style={styles.sectionTitle}>Skills</Text>
+      </View>
+      
+      <View style={styles.tagsContainer}>
+        {skills.map((skill, index) => (
+          <SkillTag key={index} skill={skill} />
+        ))}
+      </View>
+    </Animated.View>
+  );
+};
+
+// Update EmptyPostsSection with animations and premium styling
+const EmptyPostsSection = () => {
+  const { createPost } = useFeedStore();
+  const [creating, setCreating] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(20)).current;
+  
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 1000,
+        delay: 700,
+        useNativeDriver: true,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 800,
+        delay: 700,
+        useNativeDriver: true,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      }),
+    ]).start();
+  }, []);
+  
+  const handleCreateSample = async () => {
+    try {
+      setCreating(true);
+      await createPost(
+        "This is a sample post to test that posting works correctly.",
+        ["sample", "test"],
+        []
+      );
+      console.log("Created sample post");
+    } catch (error) {
+      console.error("Error creating sample post:", error);
+    } finally {
+      setCreating(false);
+    }
+  };
+  
+  return (
+    <Animated.View 
+      style={[
+        styles.sectionContainer,
+        { opacity: fadeAnim, transform: [{ translateY }] }
+      ]}
+    >
+      <View style={styles.sectionHeader}>
+        <LinearGradient
+          colors={['#0066CC', '#0091FF']}
+          style={styles.sectionIconContainer}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <FileText size={16} color="#FFFFFF" />
+        </LinearGradient>
+        <Text style={styles.sectionTitle}>No Posts Yet</Text>
+      </View>
+      
+      <View style={styles.emptyStateContainer}>
+        <View style={styles.emptyStateIconContainer}>
+          <LinearGradient
+            colors={['rgba(0, 102, 204, 0.08)', 'rgba(0, 145, 255, 0.12)']}
+            style={styles.emptyStateIcon}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <FileText size={36} color="#0066CC" />
+          </LinearGradient>
+        </View>
+        
+        <Text style={styles.emptyMessage}>
+          You haven't created any posts yet. Share your thoughts, research, or experiences with the community.
+        </Text>
+      </View>
+      
+      <TouchableOpacity 
+        style={styles.createPostButtonContainer}
+        onPress={handleCreateSample}
+        disabled={creating}
+        activeOpacity={0.9}
+      >
+        <LinearGradient
+          colors={['#0066CC', '#0091FF']}
+          style={styles.createPostButton}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+        >
+          {creating ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <>
+              <FileText size={18} color="#FFFFFF" />
+              <Text style={styles.createPostButtonText}>Create Sample Post</Text>
+            </>
+          )}
+        </LinearGradient>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
+// Create a new ExpertiseSection component
+const ExpertiseSection = ({ expertise }: { expertise: string[] | undefined }) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(15)).current;
+  
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        delay: 300,
+        useNativeDriver: true,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 800,
+        delay: 300,
+        useNativeDriver: true,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      }),
+    ]).start();
+  }, []);
+  
+  if (!expertise || expertise.length === 0) return null;
+  
+  return (
+    <Animated.View 
+      style={[
+        styles.sectionContainer, 
+        { opacity: fadeAnim, transform: [{ translateY }] }
+      ]}
+    >
+      <View style={styles.sectionHeader}>
+        <LinearGradient
+          colors={['#0066CC', '#0091FF']}
+          style={styles.sectionIconContainer}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <Star size={16} color="#FFFFFF" />
+        </LinearGradient>
+        <Text style={styles.sectionTitle}>Areas of Expertise</Text>
+      </View>
+      
+      <View style={styles.expertiseContainer}>
+        {expertise.map((item, index) => (
+          <View key={index} style={styles.expertiseTag}>
+            <LinearGradient
+              colors={['rgba(0, 102, 204, 0.08)', 'rgba(0, 145, 255, 0.12)']}
+              style={styles.expertiseTagGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Text style={styles.expertiseTagText}>{item}</Text>
+            </LinearGradient>
+          </View>
+        ))}
+      </View>
+    </Animated.View>
+  );
+};
+
+export default function ProfileScreen() {
   const { profile, settings, isLoading: profileLoading, error: profileError, fetchProfile } = useProfileStore();
-  const { posts, isLoading: postsLoading, error: postsError, fetchPosts } = useFeedStore();
+  const { posts, isLoading: postsLoading, error: postsError, fetchPosts, createPost } = useFeedStore();
+  const { 
+    suggestedDoctors = [], 
+    fetchSuggestedConnections,
+    isLoading: networkLoading
+  } = useNetworkStore();
   const [refreshing, setRefreshing] = React.useState(false);
+  const router = useRouter();
   
   // Animation values
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -184,10 +1156,32 @@ export default function Profile() {
   const translateY = useRef(new Animated.Value(30)).current;
   const headerHeight = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    fetchProfile();
-    fetchPosts({ userId: profile?.id });
+  // Function to load data
+  const loadData = async () => {
+    console.log("Loading profile data in ProfileScreen");
+    await fetchProfile();
     
+    // After profile is loaded, fetch related data
+    if (profile?.id) {
+      console.log("Fetching posts for user ID:", profile.id);
+      fetchPosts({ userId: profile.id, forceRefresh: true });
+      if (fetchSuggestedConnections) {
+        fetchSuggestedConnections();
+      }
+    }
+  };
+
+  // Use focus effect to reload data when the screen is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log("Profile screen focused, refreshing data");
+      loadData();
+      return () => {}; // cleanup function
+    }, [])
+  );
+
+  // Fetch data when component mounts and handle animations
+  useEffect(() => {
     // Start animations
     Animated.timing(headerHeight, {
       toValue: 1,
@@ -213,16 +1207,32 @@ export default function Profile() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, [profile?.id]);
+  }, []);
 
+  // Refresh handler with loading feedback
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([
-      fetchProfile(),
-      fetchPosts({ userId: profile?.id })
-    ]);
-    setRefreshing(false);
-  }, [profile?.id]);
+    
+    try {
+      await fetchProfile();
+      
+      // After profile is refreshed, fetch related data
+      if (profile?.id) {
+        await Promise.all([
+          fetchPosts({ userId: profile.id, forceRefresh: true }),
+          fetchSuggestedConnections ? fetchSuggestedConnections() : Promise.resolve()
+        ]);
+      }
+    } catch (error) {
+      console.error('Error refreshing profile:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [profile?.id, fetchSuggestedConnections]);
+
+  const navigateToEditProfile = () => {
+    router.push('/profile/edit');
+  };
 
   // Interpolate values for animations
   const interpolatedHeaderHeight = headerHeight.interpolate({
@@ -242,318 +1252,103 @@ export default function Profile() {
     extrapolate: 'clamp',
   });
 
-  // Function to safely handle avatar source
-  const getAvatarSource = (url: string | null | undefined) => {
-    if (url) {
-      return { uri: url };
+  // Modified render section for posts
+  useEffect(() => {
+    if (posts) {
+      console.log(posts.length > 0 ? `Rendering ${posts.length} posts` : "No posts to display");
     }
-    // Default image if no avatar URL is provided
-    return { uri: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2340&q=80' };
-  };
+  }, [posts]);
 
-  if ((profileLoading || postsLoading) && !refreshing && posts.length === 0) {
-    return <LoadingOverlay />;
+  if (profileLoading && !refreshing) {
+    return <LoadingOverlay message="Loading profile..." />;
   }
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       
-      {/* Background Gradient */}
-      <View style={styles.backgroundContainer}>
-        <LinearGradient
-          colors={['#062454', '#0066CC']}
-          style={styles.headerGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        />
-        
-        {/* Decorative elements */}
-        <View style={styles.decorativeCircle1} />
-        <View style={styles.decorativeCircle2} />
-        <View style={styles.decorativeLine} />
-      </View>
-      
-      {/* Sticky header that appears on scroll */}
-      <Animated.View style={[
-        styles.stickyHeader,
-        { 
-          opacity: headerOpacity,
-          height: 60
-        }
-      ]}>
-        <Text style={styles.stickyHeaderTitle}>
-          {profile?.full_name || 'My Profile'}
-        </Text>
-        <View style={styles.headerActions}>
-          <Link href="/profile/edit" asChild>
-            <TouchableOpacity style={styles.headerButton}>
-              <Edit3 size={20} color="#FFFFFF" />
-            </TouchableOpacity>
-          </Link>
-          <Link href="/profile/settings" asChild>
-            <TouchableOpacity style={styles.headerButton}>
-              <Settings size={20} color="#FFFFFF" />
-            </TouchableOpacity>
-          </Link>
-        </View>
-      </Animated.View>
-
-      {/* Main header with profile info */}
-      <Animated.View 
-        style={[
-          styles.animatedHeader,
-          { height: interpolatedHeaderHeight }
-        ]}
-      >
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Profile</Text>
-          <View style={styles.headerActions}>
-            <Link href="/profile/edit" asChild>
-              <Pressable style={styles.headerButton}>
-                <Edit3 size={20} color="#FFFFFF" />
-              </Pressable>
-            </Link>
-            <Link href="/profile/settings" asChild>
-              <Pressable style={styles.headerButton}>
-                <Settings size={20} color="#FFFFFF" />
-              </Pressable>
-            </Link>
-          </View>
-        </View>
-      </Animated.View>
-
-      <Animated.ScrollView 
-        style={styles.content} 
+      <Animated.ScrollView
+        style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
-        scrollEventThrottle={16}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
         )}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl 
             refreshing={refreshing} 
             onRefresh={onRefresh} 
-            tintColor="#FFFFFF"
-            colors={["#0066CC"]}
+            tintColor="#0066CC"
+            colors={['#0066CC']}
+            progressBackgroundColor="#FFFFFF"
           />
         }
       >
-        {(profileError || postsError) && (
-          <ErrorMessage 
-            message={profileError || postsError} 
-            onDismiss={() => {
-              if (profileError) useProfileStore.setState({ error: null });
-              if (postsError) useFeedStore.setState({ error: null });
-            }}
-          />
-        )}
-
+        <ProfileHeader profile={profile} onEditProfile={navigateToEditProfile} />
+        
+        {/* Render all profile sections */}
         <Animated.View 
           style={[
-            styles.profileCard,
+            styles.mainContent,
             {
-              opacity: scrollY.interpolate({
-                inputRange: [0, 50, 100],
-                outputRange: [1, 0.95, 0.9],
-                extrapolate: 'clamp',
-              }),
-              transform: [
-                {
-                  scale: scrollY.interpolate({
-                    inputRange: [0, 100],
-                    outputRange: [1, 0.95],
-                    extrapolate: 'clamp',
-                  }),
-                },
-              ],
-            },
+              opacity: fadeAnim,
+              transform: [{ scale: scaleAnim }, { translateY }]
+            }
           ]}
         >
-          <View style={styles.avatarContainer}>
-            <Animated.View
-              style={{
-                transform: [{
-                  scale: scrollY.interpolate({
-                    inputRange: [0, 100],
-                    outputRange: [1, 0.9],
-                    extrapolate: 'clamp',
-                  })
-                }]
-              }}
-            >
-              <Image 
-                source={getAvatarSource(profile?.avatar_url || null)}
-                style={styles.avatar}
-              />
-            </Animated.View>
-          </View>
+          <ExpertiseSection expertise={profile?.expertise} />
+          <SkillsSection skills={profile?.skills} />
           
-          <View style={styles.profileInfo}>
-            <View style={styles.nameRow}>
-              <Text style={styles.name}>
-                {profile?.full_name || 'Dr. Sarah Johnson'}
-              </Text>
-              <View style={styles.verifiedBadge}>
-                <Check size={12} color="#FFFFFF" />
+          <WorkExperienceSection experiences={profile?.work_experience} />
+          <EducationSection education={profile?.education} />
+          
+          <ResearchSection research={profile?.research} />
+          <QualityImprovementSection improvements={profile?.quality_improvement} />
+          
+          <InterestsSection interests={profile?.interests} />
+          <LanguagesSection languages={profile?.languages} />
+          
+          {/* Featured Posts Section */}
+          {posts && posts.length > 0 ? (
+            <Animated.View
+              style={[
+                styles.sectionContainer,
+                { opacity: fadeAnim, transform: [{ translateY }] }
+              ]}
+            >
+              <View style={styles.sectionHeader}>
+                <LinearGradient
+                  colors={['#0066CC', '#0091FF']}
+                  style={styles.sectionIconContainer}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <FileText size={16} color="#FFFFFF" />
+                </LinearGradient>
+                <Text style={styles.sectionTitle}>Featured Posts</Text>
               </View>
-            </View>
-            <Text style={styles.title}>
-              {profile?.specialty || 'Cardiologist'}
-            </Text>
-            <View style={styles.locationRow}>
-              <View style={styles.detailRow}>
-                <Building2 size={16} color="#64748b" />
-                <Text style={styles.detailText}>
-                  {profile?.hospital || 'Mayo Clinic'}
-                </Text>
+              
+              <View style={styles.postsContainer}>
+                {posts.slice(0, 2).map((post) => (
+                  <PostCard key={post.id} post={post} />
+                ))}
+                
+                {posts.length > 2 && (
+                  <Link href="/profile/posts" asChild>
+                    <TouchableOpacity style={styles.viewAllButton}>
+                      <Text style={styles.viewAllText}>View All Posts</Text>
+                      <ChevronRightIcon size={18} color="#0066CC" />
+                    </TouchableOpacity>
+                  </Link>
+                )}
               </View>
-              <View style={styles.detailRow}>
-                <MapPin size={16} color="#64748b" />
-                <Text style={styles.detailText}>
-                  {profile?.location || 'Rochester, MN'}
-                </Text>
-              </View>
-            </View>
-          </View>
-        </Animated.View>
-
-        <Animated.View 
-          style={[
-            styles.statsCard,
-            {
-              opacity: fadeAnim,
-              transform: [
-                { translateY: Animated.multiply(translateY, 0.9) },
-                { scale: scaleAnim }
-              ]
-            }
-          ]}
-        >
-          <StatBox label="Followers" value={profile?.followers_count || 0} />
-          <View style={styles.statDivider} />
-          <StatBox label="Following" value={profile?.following_count || 0} />
-          <View style={styles.statDivider} />
-          <StatBox label="Posts" value={profile?.posts_count || 0} />
-        </Animated.View>
-
-        <Animated.View 
-          style={[
-            styles.section,
-            {
-              opacity: fadeAnim,
-              transform: [
-                { translateY: Animated.multiply(translateY, 0.8) },
-                { scale: scaleAnim }
-              ]
-            }
-          ]}
-        >
-          <Text style={styles.sectionTitle}>About</Text>
-          <Text style={styles.bio}>{profile?.bio || 'No bio available.'}</Text>
-        </Animated.View>
-
-        <Animated.View 
-          style={[
-            styles.section,
-            {
-              opacity: fadeAnim,
-              transform: [
-                { translateY: Animated.multiply(translateY, 0.7) },
-                { scale: scaleAnim }
-              ]
-            }
-          ]}
-        >
-          <Text style={styles.sectionTitle}>Expertise</Text>
-          <View style={styles.expertiseTags}>
-            {profile?.expertise?.map((tag) => (
-              <ExpertiseTag key={tag} label={tag} />
-            )) || (
-              <Text style={styles.loadingText}>No expertise listed</Text>
-            )}
-          </View>
-        </Animated.View>
-
-        <Animated.View 
-          style={[
-            styles.section,
-            {
-              opacity: fadeAnim,
-              transform: [
-                { translateY: Animated.multiply(translateY, 0.6) },
-                { scale: scaleAnim }
-              ]
-            }
-          ]}
-        >
-          <Text style={styles.sectionTitle}>Achievements</Text>
-          <View style={styles.achievements}>
-            <Achievement icon={Award} label="Top Contributor 2024" />
-            <Achievement icon={FileText} label="50+ Publications" />
-            <Achievement icon={Shield} label="Research Lead" />
-          </View>
-        </Animated.View>
-
-        <Animated.View 
-          style={[
-            styles.postsSection,
-            {
-              opacity: fadeAnim,
-              transform: [
-                { translateY: Animated.multiply(translateY, 0.5) },
-                { scale: scaleAnim }
-              ]
-            }
-          ]}
-        >
-          <Text style={styles.sectionTitle}>Posts</Text>
-          {posts.length > 0 ? (
-            posts.map((post) => (
-              <PostCard key={post.id} post={post} />
-            ))
-          ) : (
-            <View style={styles.emptyPosts}>
-              <Text style={styles.emptyPostsTitle}>No posts yet</Text>
-              <Text style={styles.emptyPostsText}>Share your medical insights with the community</Text>
-              <Link href="/home/create" asChild>
-                <TouchableOpacity style={styles.createPostButton}>
-                  <Text style={styles.createPostButtonText}>Create Post</Text>
-                </TouchableOpacity>
-              </Link>
-            </View>
-          )}
-        </Animated.View>
-
-        <Animated.View 
-          style={[
-            styles.engagementSection,
-            {
-              opacity: fadeAnim,
-              transform: [
-                { translateY: Animated.multiply(translateY, 0.4) },
-                { scale: scaleAnim }
-              ]
-            }
-          ]}
-        >
-          <TouchableOpacity style={styles.engagementButton}>
-            <Heart size={20} color="#0066CC" />
-            <Text style={styles.engagementText}>Liked Posts</Text>
-            <ChevronRight size={18} color="#64748b" style={{ marginLeft: 'auto' }} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.engagementButton}>
-            <Bookmark size={20} color="#0066CC" />
-            <Text style={styles.engagementText}>Saved Items</Text>
-            <ChevronRight size={18} color="#64748b" style={{ marginLeft: 'auto' }} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.engagementButton}>
-            <Share2 size={20} color="#0066CC" />
-            <Text style={styles.engagementText}>Share Profile</Text>
-            <ChevronRight size={18} color="#64748b" style={{ marginLeft: 'auto' }} />
-          </TouchableOpacity>
+            </Animated.View>
+          ) : <EmptyPostsSection />}
+          
+          {/* Suggested Connections at the end */}
+          <SuggestedConnectionsSection suggestedDoctors={suggestedDoctors} />
         </Animated.View>
       </Animated.ScrollView>
     </View>
@@ -563,426 +1358,792 @@ export default function Profile() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#F1F5F9',
+  },
+  scrollView: {
+    flex: 1,
   },
   contentContainer: {
-    paddingTop: Platform.OS === 'ios' ? 160 : 140,
+    paddingTop: Platform.OS === 'ios' ? 50 : 30,
+    paddingHorizontal: 0,
+    paddingBottom: 40,
+  },
+  mainContent: {
+    paddingHorizontal: 16,
+  },
+  headerContainer: {
+    backgroundColor: '#F8FAFC',
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 10,
+    marginBottom: 24,
+  },
+  bannerImage: {
+    width: '100%',
+    height: 180,
+  },
+  bannerImageStyle: {
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  bannerGradient: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    padding: 20,
+  },
+  bannerContent: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  editProfileButton: {
+    overflow: 'hidden',
+    borderRadius: 24,
+    shadowColor: '#0066CC',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  editProfileButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 24,
+  },
+  editButtonText: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#FFFFFF',
+    marginLeft: 8,
+  },
+  profileContentContainer: {
     paddingHorizontal: 20,
     paddingBottom: 24,
   },
-  backgroundContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 250,
-    zIndex: 0,
+  profileImageContainer: {
+    alignItems: 'center',
+    marginTop: -60,
+    marginBottom: 16,
   },
-  headerGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
+  profileImageWrapper: {
+    position: 'relative',
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 4,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  profileImage: {
+    width: '100%',
     height: '100%',
+    borderRadius: 50,
   },
-  decorativeCircle1: {
-    position: 'absolute',
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    top: -120,
-    right: -100,
-  },
-  decorativeCircle2: {
-    position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    top: 80,
-    left: -80,
-  },
-  decorativeLine: {
-    position: 'absolute',
-    width: 120,
-    height: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    bottom: 40,
-    right: 40,
-    transform: [{ rotate: '30deg' }],
-  },
-  stickyHeader: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 50 : 16,
-    zIndex: 2,
-  },
-  stickyHeaderTitle: {
-    fontSize: 20,
-    fontFamily: 'Inter_600SemiBold',
-    color: '#FFFFFF',
-  },
-  animatedHeader: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 1,
-    paddingTop: Platform.OS === 'ios' ? 50 : 16,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontFamily: 'Inter_600SemiBold',
-    color: '#FFFFFF',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  profileImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
-  content: {
-    flex: 1,
-  },
-  profileCard: {
-    padding: 20,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 102, 204, 0.05)',
-    alignItems: 'center',
-  },
-  avatarContainer: {
-    alignItems: 'center',
-    marginBottom: 16,
-    position: 'relative',
-  },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 3,
-    borderColor: 'rgba(0, 102, 204, 0.2)',
-  },
-  profileInfo: {
-    alignItems: 'center',
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  name: {
-    fontSize: 24,
-    fontFamily: 'Inter_700Bold',
-    color: '#1e293b',
-    marginRight: 8,
+  profileImagePlaceholderText: {
+    fontSize: 42,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#FFFFFF',
   },
   verifiedBadge: {
-    backgroundColor: '#0066CC',
-    borderRadius: 10,
-    width: 20,
-    height: 20,
+    position: 'absolute',
+    bottom: 5,
+    right: 5,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    overflow: 'hidden',
+  },
+  verifiedBadgeGradient: {
+    width: '100%',
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  verifiedText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  title: {
-    fontSize: 18,
-    fontFamily: 'Inter_600SemiBold',
-    color: '#0066CC',
-    marginBottom: 16,
-  },
-  locationRow: {
-    gap: 16, 
-    marginTop: 8,
-  },
-  detailRow: {
-    flexDirection: 'row',
+  doctorInfoContainer: {
     alignItems: 'center',
-    gap: 8,
   },
-  detailText: {
-    fontSize: 16,
-    fontFamily: 'Inter_400Regular',
-    color: '#64748b',
-  },
-  statsCard: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 102, 204, 0.05)',
-  },
-  statBox: {
-    alignItems: 'center',
-    width: '33%',
-  },
-  statValue: {
-    fontSize: 24,
+  doctorName: {
+    fontSize: 26,
     fontFamily: 'Inter_700Bold',
-    color: '#1e293b',
+    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: 8,
   },
-  statLabel: {
+  specialtyContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  specialtyText: {
     fontSize: 16,
     fontFamily: 'Inter_500Medium',
-    color: '#64748b',
+    color: '#334155',
+    marginLeft: 6,
+  },
+  infoCardsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    marginBottom: 20,
+    gap: 10,
+  },
+  infoCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  infoCardGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  infoCardText: {
+    fontSize: 14,
+    fontFamily: 'Inter_500Medium',
+    color: '#334155',
+    marginLeft: 8,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 102, 204, 0.04)',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginTop: 8,
+    width: '100%',
+  },
+  statItem: {
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  statValue: {
+    fontSize: 18,
+    fontFamily: 'Inter_700Bold',
+    color: '#0F172A',
+  },
+  statLabel: {
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
+    color: '#64748B',
     marginTop: 4,
   },
-  statIndicator: {
-    width: 36,
-    height: 3,
-    backgroundColor: '#0066CC',
-    borderRadius: 1.5,
-    marginTop: 8,
-  },
-  statDivider: {
+  statSeparator: {
     width: 1,
-    height: 40,
-    backgroundColor: 'rgba(0, 102, 204, 0.1)',
+    height: 24,
+    backgroundColor: 'rgba(0, 102, 204, 0.15)',
   },
-  section: {
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    marginBottom: 16,
+  bioContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
     borderRadius: 16,
-    shadowColor: '#000',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    marginTop: 20,
+    shadowColor: '#0066CC',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 102, 204, 0.08)',
+  },
+  bioLabel: {
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#0F172A',
+    marginBottom: 8,
+  },
+  bioText: {
+    fontSize: 15,
+    fontFamily: 'Inter_400Regular',
+    color: '#334155',
+    lineHeight: 22,
+  },
+  sectionContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 20,
+    shadowColor: '#0066CC',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 6,
     borderWidth: 1,
     borderColor: 'rgba(0, 102, 204, 0.05)',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 102, 204, 0.08)',
   },
   sectionTitle: {
     fontSize: 18,
     fontFamily: 'Inter_600SemiBold',
-    color: '#1e293b',
-    marginBottom: 16,
+    color: '#0F172A',
+    marginLeft: 10,
   },
-  bio: {
-    fontSize: 15,
-    fontFamily: 'Inter_400Regular',
-    color: '#64748b',
-    lineHeight: 22,
-  },
-  expertiseTags: {
+  tagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
-  expertiseTag: {
+  tagItemWrapper: {
+    borderRadius: 16,
+    marginRight: 8,
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  tagItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 102, 204, 0.1)',
+    borderRadius: 16,
   },
-  expertiseText: {
+  tagItemText: {
     fontSize: 14,
     fontFamily: 'Inter_500Medium',
     color: '#0066CC',
+    marginLeft: 4,
   },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    color: '#64748b',
-    fontStyle: 'italic',
+  skillItemWrapper: {
+    borderRadius: 16,
+    marginRight: 8,
+    marginBottom: 8,
+    overflow: 'hidden',
   },
-  achievements: {
-    gap: 12,
-  },
-  achievement: {
+  skillItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#FFFFFF',
-    padding: 12,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderWidth: 1,
-    borderColor: 'rgba(0, 102, 204, 0.05)',
+    borderColor: 'rgba(0, 102, 204, 0.1)',
+    borderRadius: 16,
   },
-  achievementIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  skillItemText: {
+    fontSize: 14,
+    fontFamily: 'Inter_500Medium',
+    color: '#0066CC',
+    marginLeft: 6,
+  },
+  experienceList: {
+    gap: 20,
+  },
+  experienceItem: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  experienceDateContainer: {
+    width: 100,
+    paddingRight: 14,
+  },
+  experienceDate: {
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#64748b',
+  },
+  experienceContent: {
+    flex: 1,
+    borderLeftWidth: 2,
+    borderLeftColor: 'rgba(0, 102, 204, 0.3)',
+    paddingLeft: 14,
+  },
+  experienceTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  experienceOrg: {
+    fontSize: 15,
+    fontFamily: 'Inter_500Medium',
+    color: '#0066CC',
+    marginBottom: 6,
+  },
+  experienceLocation: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: 8,
   },
-  achievementText: {
+  experienceLocationText: {
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
+    color: '#64748b',
+    marginLeft: 6,
+  },
+  experienceDescription: {
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    color: '#334155',
+    lineHeight: 21,
+  },
+  educationList: {
+    gap: 20,
+  },
+  educationItem: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  educationDateContainer: {
+    width: 100,
+    paddingRight: 14,
+  },
+  educationDate: {
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#64748b',
+  },
+  educationContent: {
+    flex: 1,
+    borderLeftWidth: 2,
+    borderLeftColor: 'rgba(0, 102, 204, 0.3)',
+    paddingLeft: 14,
+  },
+  educationDegree: {
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  educationInstitution: {
+    fontSize: 15,
+    fontFamily: 'Inter_500Medium',
+    color: '#0066CC',
+    marginBottom: 6,
+  },
+  educationLocation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  educationLocationText: {
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
+    color: '#64748b',
+    marginLeft: 6,
+  },
+  educationDescription: {
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    color: '#334155',
+    lineHeight: 20,
+  },
+  researchList: {
+    gap: 16,
+  },
+  researchItem: {
+    backgroundColor: 'rgba(0, 102, 204, 0.04)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 102, 204, 0.08)',
+  },
+  researchTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  researchJournal: {
+    fontSize: 14,
+    fontFamily: 'Inter_500Medium',
+    color: '#0066CC',
+    marginBottom: 6,
+  },
+  researchDate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  researchDateText: {
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
+    color: '#64748b',
+    marginLeft: 6,
+  },
+  researchDescription: {
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    color: '#334155',
+    lineHeight: 21,
+    marginBottom: 12,
+  },
+  researchLink: {
+    backgroundColor: 'rgba(0, 102, 204, 0.1)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 102, 204, 0.15)',
+  },
+  researchLinkText: {
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#0066CC',
+  },
+  qiList: {
+    gap: 16,
+  },
+  qiItem: {
+    backgroundColor: 'rgba(0, 102, 204, 0.04)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 102, 204, 0.08)',
+  },
+  qiTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  qiOrganization: {
+    fontSize: 14,
+    fontFamily: 'Inter_500Medium',
+    color: '#0066CC',
+    marginBottom: 6,
+  },
+  qiDate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  qiDateText: {
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
+    color: '#64748b',
+    marginLeft: 6,
+  },
+  qiDescription: {
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    color: '#334155',
+    lineHeight: 20,
+  },
+  interestsList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  interestItemWrapper: {
+    borderRadius: 16,
+    marginRight: 8,
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  interestItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 102, 204, 0.1)',
+    borderRadius: 16,
+  },
+  interestText: {
+    fontSize: 14,
+    fontFamily: 'Inter_500Medium',
+    color: '#0066CC',
+    marginLeft: 6,
+  },
+  languagesList: {
+    gap: 12,
+  },
+  languageItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  languageName: {
     fontSize: 15,
     fontFamily: 'Inter_500Medium',
     color: '#1e293b',
   },
-  postsSection: {
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    marginBottom: 16,
-    gap: 16,
+  languageProficiency: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+  },
+  proficiencyLabel: {
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
+    color: '#64748b',
+    marginBottom: 4,
+    textTransform: 'capitalize',
+  },
+  proficiencyIndicator: {
+    flexDirection: 'row',
+    gap: 3,
+  },
+  proficiencyDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  proficiencyActive: {
+    backgroundColor: '#0066CC',
+  },
+  proficiencyInactive: {
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  postsContainer: {
+    gap: 12,
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    marginTop: 12,
+    backgroundColor: 'rgba(0, 102, 204, 0.05)',
     borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 102, 204, 0.1)',
+  },
+  viewAllText: {
+    fontSize: 15,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#0066CC',
+    marginRight: 6,
+  },
+  connectionsList: {
+    gap: 12,
+  },
+  connectionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    backgroundColor: 'rgba(0, 102, 204, 0.03)',
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(0, 102, 204, 0.05)',
+    marginBottom: 8,
+  },
+  connectionAvatar: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    marginRight: 16,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  connectionInfo: {
+    flex: 1,
+  },
+  connectionName: {
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  connectionTitle: {
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
+    color: '#64748b',
+  },
+  connectButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#0066CC',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  connectButtonGradient: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  achievement: {
+    alignItems: 'center',
+    marginHorizontal: 8,
+  },
+  achievementIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  achievementText: {
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
+    color: '#64748b',
+    textAlign: 'center',
   },
   postCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#0066CC',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 5,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(0, 102, 204, 0.1)',
-    gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    borderColor: 'rgba(0, 102, 204, 0.05)',
   },
   postContent: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: 'Inter_400Regular',
-    color: '#1e293b',
-    lineHeight: 24,
+    color: '#334155',
+    lineHeight: 22,
+    marginBottom: 12,
   },
   postImage: {
     width: '100%',
     height: 200,
-    borderRadius: 12,
+    borderRadius: 8,
+    marginBottom: 12,
   },
   hashtags: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    marginBottom: 12,
   },
   hashtag: {
     fontSize: 14,
     fontFamily: 'Inter_500Medium',
     color: '#0066CC',
+    marginRight: 8,
   },
   postActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 102, 204, 0.1)',
+    borderTopColor: '#E5E5E5',
+    paddingTop: 12,
   },
   postAction: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    padding: 4,
+    marginRight: 20,
   },
   postActionText: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'Inter_400Regular',
     color: '#64748b',
+    marginLeft: 4,
   },
-  emptyPosts: {
-    padding: 24,
+  expertiseContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 12,
+  },
+  expertiseTag: {
+    marginRight: 8,
+    marginBottom: 8,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  expertiseTagGradient: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  expertiseTagText: {
+    fontSize: 14,
+    fontFamily: 'Inter_500Medium',
+    color: '#0066CC',
+  },
+  emptyStateContainer: {
     alignItems: 'center',
-    gap: 8,
+    paddingVertical: 20,
   },
-  emptyPostsTitle: {
-    fontSize: 17,
-    fontFamily: 'Inter_600SemiBold',
-    color: '#1e293b',
+  emptyStateIconContainer: {
+    marginBottom: 16,
+    borderRadius: 44,
+    padding: 2,
+    backgroundColor: 'rgba(0, 102, 204, 0.04)',
   },
-  emptyPostsText: {
+  emptyStateIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  emptyMessage: {
     fontSize: 15,
     fontFamily: 'Inter_400Regular',
-    color: '#64748b',
+    color: '#334155',
+    lineHeight: 22,
     textAlign: 'center',
+    marginBottom: 20,
+  },
+  createPostButtonContainer: {
+    overflow: 'hidden',
+    borderRadius: 16,
+    shadowColor: '#0066CC',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 5,
   },
   createPostButton: {
-    marginTop: 16,
-    backgroundColor: '#0066CC',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 16,
+  },
+  createPostButtonText: {
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#FFFFFF',
+    marginLeft: 8,
+  },
+  sectionIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#0066CC',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 3,
-  },
-  createPostButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontFamily: 'Inter_500Medium',
-  },
-  engagementSection: {
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    marginBottom: 16,
-    gap: 12,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 102, 204, 0.05)',
-  },
-  engagementButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 12,
-    backgroundColor: 'rgba(0, 102, 204, 0.05)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 102, 204, 0.1)',
-  },
-  engagementText: {
-    fontSize: 15,
-    fontFamily: 'Inter_500Medium',
-    color: '#1e293b',
   },
 });

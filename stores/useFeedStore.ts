@@ -19,6 +19,7 @@ export interface Post {
     avatar_url: string;
     specialty: string;
     hospital: string;
+    verified?: boolean;
   };
   has_liked?: boolean;
   has_reposted?: boolean;
@@ -40,6 +41,7 @@ export interface Comment {
     full_name: string;
     avatar_url: string;
     specialty: string;
+    verified?: boolean;
   };
 }
 
@@ -50,8 +52,17 @@ interface Hashtag {
 
 export interface FeedStore extends FeedState {
   // All existing methods plus new ones
-  loadMorePosts: () => Promise<void>;
-  refreshPosts: () => Promise<void>;
+  loadMorePosts: (options?: {
+    userId?: string;
+    hashtag?: string;
+    following?: boolean;
+  }) => Promise<void>;
+  refreshPosts: (options?: {
+    userId?: string;
+    hashtag?: string;
+    following?: boolean;
+  }) => Promise<void>;
+  deletePost: (postId: string) => Promise<boolean>;
 }
 
 interface FeedState {
@@ -70,6 +81,7 @@ interface FeedState {
     forceRefresh?: boolean;
   }) => Promise<void>;
   createPost: (content: string, hashtags?: string[], mediaUrls?: string[]) => Promise<void>;
+  deletePost: (postId: string) => Promise<boolean>;
   likePost: (postId: string) => Promise<void>;
   repostPost: (postId: string, content?: string) => Promise<void>;
   fetchTrendingHashtags: () => Promise<void>;
@@ -186,7 +198,7 @@ export const useFeedStore = create<FeedStore>((set, get) => ({
     }
   },
   
-  loadMorePosts: async () => {
+  loadMorePosts: async (options = {}) => {
     const { currentPage, posts, isLoadingMore, hasMorePosts } = get();
     
     if (isLoadingMore || !hasMorePosts) return;
@@ -197,7 +209,7 @@ export const useFeedStore = create<FeedStore>((set, get) => ({
       const from = nextPage * POSTS_PER_PAGE;
       const to = from + POSTS_PER_PAGE - 1;
       
-      const { data: newPosts, error } = await supabase
+      let query = supabase
         .from('posts')
         .select(`
           *,
@@ -210,6 +222,37 @@ export const useFeedStore = create<FeedStore>((set, get) => ({
         `)
         .order('created_at', { ascending: false })
         .range(from, to);
+
+      if (options.userId) {
+        query = query.eq('author_id', options.userId);
+      }
+
+      if (options.hashtag) {
+        query = query.contains('hashtags', [options.hashtag]);
+      }
+
+      if (options.following) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Not authenticated');
+
+        const { data: following } = await supabase
+          .from('doctor_follows')
+          .select('following_id')
+          .eq('follower_id', user.id);
+
+        if (following?.length) {
+          query = query.in('author_id', following.map(f => f.following_id));
+        } else {
+          // No followed users, return empty result
+          set({
+            isLoadingMore: false,
+            hasMorePosts: false
+          });
+          return;
+        }
+      }
+      
+      const { data: newPosts, error } = await query;
         
       if (error) throw error;
       
@@ -250,8 +293,8 @@ export const useFeedStore = create<FeedStore>((set, get) => ({
     }
   },
   
-  refreshPosts: async () => {
-    return get().fetchPosts({ forceRefresh: true });
+  refreshPosts: async (options = {}) => {
+    return get().fetchPosts({ ...options, forceRefresh: true });
   },
 
   createPost: async (content, hashtags = [], mediaUrls = []) => {
@@ -274,6 +317,46 @@ export const useFeedStore = create<FeedStore>((set, get) => ({
       await get().fetchPosts();
     } catch (error) {
       set({ error: (error as Error).message });
+    }
+  },
+
+  deletePost: async (postId) => {
+    try {
+      // First check if the user is the author of the post
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+      
+      // Get the post to verify ownership
+      const { data: post } = await supabase
+        .from('posts')
+        .select('author_id')
+        .eq('id', postId)
+        .single();
+      
+      if (!post) throw new Error('Post not found');
+      
+      // Verify ownership
+      if (post.author_id !== user.id) {
+        throw new Error('You can only delete your own posts');
+      }
+      
+      // Delete the post
+      const { error } = await supabase
+        .from('posts')
+        .delete()
+        .eq('id', postId);
+      
+      if (error) throw error;
+      
+      // Optimistically update the UI by removing the post
+      set(state => ({
+        posts: state.posts.filter(p => p.id !== postId)
+      }));
+      
+      return true;
+    } catch (error) {
+      set({ error: (error as Error).message });
+      return false;
     }
   },
 
@@ -446,11 +529,39 @@ export const useFeedStore = create<FeedStore>((set, get) => ({
         }
       }
 
-      // Update comments count
+      // Update post comments count in database
+      try {
+        await supabase.rpc('increment_post_comments_count', { 
+          p_post_id: postId 
+        });
+      } catch (e) {
+        console.warn('Increment post comments count function not available:', e);
+        
+        // Fallback: Update the post's comments_count directly if the RPC doesn't exist
+        try {
+          const { data: post } = await supabase
+            .from('posts')
+            .select('comments_count')
+            .eq('id', postId)
+            .single();
+            
+          if (post) {
+            const updatedCount = (post.comments_count || 0) + 1;
+            await supabase
+              .from('posts')
+              .update({ comments_count: updatedCount })
+              .eq('id', postId);
+          }
+        } catch (error) {
+          console.error('Error updating post comments count:', error);
+        }
+      }
+
+      // Update comments count in local state
       set(state => ({
         posts: state.posts.map(post =>
           post.id === postId
-            ? { ...post, comments_count: post.comments_count + 1 }
+            ? { ...post, comments_count: (post.comments_count || 0) + 1 }
             : post
         )
       }));
