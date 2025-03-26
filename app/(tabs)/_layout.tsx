@@ -1,4 +1,4 @@
-import React, { useEffect, useState, memo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { Chrome as Home, Users, MessageCircle, MessagesSquare, Bell, User } from 'lucide-react-native';
 import { Platform, View, StyleSheet, ActivityIndicator } from 'react-native';
@@ -9,6 +9,8 @@ import { useDiscussionsStore } from '@/stores/useDiscussionsStore';
 import { useChatStore } from '@/stores/useChatStore';
 import { useNotificationsStore } from '@/stores/useNotificationsStore';
 import ProfileIconHeader from '@/components/ProfileIconHeader';
+import { NotificationBell } from '@/components/NotificationBell';
+import NotificationManager from '@/components/NotificationManager';
 
 export default function TabLayout() {
   const { isAuthenticated, checkAuth, isLoading } = useAuthStore();
@@ -86,8 +88,15 @@ export default function TabLayout() {
 
   return (
     <>
-      {/* Single ProfileIconHeader for the entire app */}
-      <ProfileIconHeader />
+      {/* Header Icons - Profile and Notification */}
+      <View style={styles.headerIconsContainer}>
+        <NotificationBell />
+        <ProfileIconHeader />
+      </View>
+      
+      {/* Notification Manager for handling push notifications and toasts */}
+      <NotificationManager />
+      
       <Tabs
         screenOptions={{
           tabBarActiveTintColor: '#0066CC',
@@ -159,6 +168,8 @@ export default function TabLayout() {
             tabBarBadgeStyle: {
               backgroundColor: '#0066CC',
             },
+            // Hide this tab as we now have a notification bell in the header
+            tabBarItemStyle: { display: 'none' },
           }}
         />
         <Tabs.Screen
@@ -175,3 +186,14 @@ export default function TabLayout() {
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  headerIconsContainer: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 24,
+    right: 16,
+    zIndex: 100,
+    flexDirection: 'row',
+    alignItems: 'center',
+  }
+});

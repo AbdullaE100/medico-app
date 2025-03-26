@@ -19,7 +19,8 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.medical.network",
-      "newArchEnabled": true
+      "newArchEnabled": true,
+      "permissions": ["NOTIFICATIONS"]
     },
     "android": {
       "adaptiveIcon": {
@@ -27,7 +28,8 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.medical.network",
-      "newArchEnabled": true
+      "newArchEnabled": true,
+      "permissions": ["NOTIFICATIONS"]
     },
     "web": {
       "bundler": "metro",
@@ -36,7 +38,15 @@
     },
     "plugins": [
       "expo-router",
-      "react-native-reanimated"
+      "react-native-reanimated",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#0066CC",
+          "sounds": ["./assets/sounds/notification.wav"]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
@@ -49,6 +59,13 @@
       "eas": {
         "projectId": "your-project-id"
       }
+    },
+    "notification": {
+      "icon": "./assets/images/notification-icon.png",
+      "color": "#0066CC",
+      "androidMode": "default",
+      "androidCollapsedTitle": "Medico",
+      "iosDisplayInForeground": false
     }
   }
 }
