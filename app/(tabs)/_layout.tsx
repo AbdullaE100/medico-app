@@ -198,16 +198,15 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 1000,
+    height: Platform.OS === 'ios' ? 44 : StatusBar.currentHeight || 24,
   },
   headerIconsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    paddingTop: Platform.OS === 'ios' ? 48 : StatusBar.currentHeight || 24,
+    paddingTop: Platform.OS === 'ios' ? 4 : 0,
     paddingRight: 16,
-    paddingBottom: 8,
     backgroundColor: 'transparent',
-    height: Platform.OS === 'ios' ? 95 : 70,
   },
   iconGroup: {
     flexDirection: 'row',

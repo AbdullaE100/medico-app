@@ -815,7 +815,7 @@ const styles = StyleSheet.create({
   },
   animatedHeader: {
     width: '100%',
-    paddingTop: Platform.OS === 'ios' ? 50 : 30,
+    paddingTop: Platform.OS === 'ios' ? 44 : 30,
     paddingHorizontal: 16,
     zIndex: 2,
   },
@@ -824,6 +824,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
+    paddingTop: Platform.OS === 'ios' ? 20 : 10,
     paddingBottom: 12,
   },
   logoContainer: {

@@ -94,7 +94,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ inHeader = f
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <View style={styles.iconBackground}>
-              <Bell size={22} color="#FFFFFF" />
+              <Bell size={18} color="#FFFFFF" />
               {unreadCount > 0 && (
                 <View style={styles.badge} />
               )}
@@ -170,11 +170,11 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   iconContainerInline: {
-    width: 42,
-    height: 42,
+    width: 32,
+    height: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 8,
   },
   iconButton: {
     width: '100%',
@@ -188,9 +188,9 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   iconBackground: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: '#0066CC',
     justifyContent: 'center',
     alignItems: 'center',
