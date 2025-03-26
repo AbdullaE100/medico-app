@@ -140,7 +140,7 @@ export const ProfileIconHeader: React.FC<ProfileIconHeaderProps> = ({ inHeader =
                   resizeMode="cover"
                 />
               ) : (
-                <User size={18} color="#FFFFFF" />
+                <User size={22} color="#FFFFFF" />
               )}
             </LinearGradient>
           </TouchableOpacity>
@@ -216,8 +216,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   iconContainerInline: {
-    width: 32,
-    height: 32,
+    width: 42,
+    height: 42,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -230,18 +230,18 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   iconGradient: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   avatarImage: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 1,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 2,
     borderColor: 'white',
   },
 });

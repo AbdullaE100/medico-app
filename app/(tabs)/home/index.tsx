@@ -344,6 +344,36 @@ const PostSkeleton = () => (
   </View>
 );
 
+// Add a header component with the search bar and logo, positioned correctly with space for icons
+const HomeHeader = () => {
+  return (
+    <View style={styles.headerContainer}>
+      <View style={styles.topRow}>
+        <View style={styles.logoContainer}>
+          <View style={styles.logoBackground}>
+            <Heart size={24} color="#FFFFFF" />
+          </View>
+          <Text style={styles.title}>MEDICO</Text>
+        </View>
+        
+        {/* This space is intentionally left blank for the icons from _layout.tsx */}
+        <View style={styles.iconsPlaceholder} />
+      </View>
+      
+      <View style={styles.searchBarRow}>
+        <View style={styles.searchContainer}>
+          <Search size={20} color="#8E8E93" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search topics, hashtags, doctors..."
+            placeholderTextColor="#8E8E93"
+          />
+        </View>
+      </View>
+    </View>
+  );
+};
+
 export default function Feed() {
   const { 
     posts, 
@@ -570,90 +600,14 @@ export default function Feed() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       
-      {/* Background Gradient */}
-      <View style={styles.backgroundContainer}>
-        <LinearGradient
-          colors={['#062454', '#0066CC']}
-          style={styles.headerGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        />
-        
-        {/* Decorative elements */}
-        <View style={styles.decorativeCircle1} />
-        <View style={styles.decorativeCircle2} />
-        <View style={styles.decorativeLine} />
-      </View>
+      {/* Use custom header instead of the one with conflicting icons */}
+      <LinearGradient
+        colors={['#004080', '#0066CC']}
+        style={styles.headerBackground}
+      >
+        <HomeHeader />
+      </LinearGradient>
       
-      {/* Animated Header */}
-      <Animated.View 
-        style={[
-          styles.animatedHeader,
-          { height: interpolatedHeaderHeight }
-        ]}
-      >
-        <View style={styles.headerTopRow}>
-          <View style={styles.logoContainer}>
-            <Animated.View 
-              style={[
-                styles.heartIcon,
-                { transform: [{ scale: heartBeat }] }
-              ]}
-            >
-              <Heart size={20} color="#fff" fill="#fff" />
-            </Animated.View>
-            <Text style={styles.title}>MEDICO</Text>
-          </View>
-        </View>
-        
-        <Animated.View 
-          style={[
-            styles.searchBarContainer,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY }]
-            }
-          ]}
-        >
-          <View style={styles.searchBar}>
-            <Search size={16} color="#fff" style={styles.searchIcon} />
-            <TextInput
-              placeholder="Search topics, hashtags, doctors..."
-              placeholderTextColor="rgba(255, 255, 255, 0.6)"
-              style={styles.searchInput}
-              value={searchQuery}
-              onChangeText={handleSearch}
-            />
-          </View>
-        </Animated.View>
-      </Animated.View>
-
-      {/* Tabs */}
-      <Animated.View 
-        style={[
-          styles.tabsContainer,
-          {
-            opacity: fadeAnim,
-            transform: [{ scale: scaleAnim }]
-          }
-        ]}
-      >
-        <TouchableOpacity 
-          style={[styles.tab, activeTab === 'Threads' && styles.activeTab]} 
-          onPress={() => handleTabChange('Threads')}
-        >
-          <Text style={[styles.tabText, activeTab === 'Threads' && styles.activeTabText]}>Threads</Text>
-          {activeTab === 'Threads' && <View style={styles.activeTabIndicator} />}
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.tab, activeTab === 'Following' && styles.activeTab]} 
-          onPress={() => handleTabChange('Following')}
-        >
-          <Text style={[styles.tabText, activeTab === 'Following' && styles.activeTabText]}>Following</Text>
-          {activeTab === 'Following' && <View style={styles.activeTabIndicator} />}
-        </TouchableOpacity>
-      </Animated.View>
-
       {error && (
         <ErrorMessage 
           message={error} 
@@ -768,116 +722,61 @@ export default function Feed() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#F8F9FA',
   },
-  backgroundContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: Platform.OS === 'ios' ? 200 : 180,
-    zIndex: 0,
-    overflow: 'hidden',
-  },
-  headerGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: '100%',
-  },
-  decorativeCircle1: {
-    position: 'absolute',
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    top: -120,
-    right: -100,
-  },
-  decorativeCircle2: {
-    position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    top: 80,
-    left: -80,
-  },
-  decorativeLine: {
-    position: 'absolute',
-    width: 120,
-    height: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    bottom: 40,
-    right: 40,
-    transform: [{ rotate: '30deg' }],
-  },
-  animatedHeader: {
+  headerBackground: {
     width: '100%',
-    paddingTop: Platform.OS === 'ios' ? 44 : 30,
-    paddingHorizontal: 16,
-    zIndex: 2,
   },
-  headerTopRow: {
+  headerContainer: {
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 50 : 30,
+    paddingBottom: 16,
+  },
+  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
-    paddingTop: Platform.OS === 'ios' ? 20 : 10,
-    paddingBottom: 12,
   },
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingBottom: 12,
   },
-  heartIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#ff6b6b',
-    alignItems: 'center',
+  logoBackground: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FF5A5F',
     justifyContent: 'center',
-    marginRight: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
+    alignItems: 'center',
+    marginRight: 12,
   },
   title: {
     fontSize: 24,
-    fontFamily: 'Inter_700Bold',
+    fontWeight: 'bold',
     color: '#FFFFFF',
-    letterSpacing: 1,
-    textShadowColor: 'rgba(0, 0, 0, 0.1)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    fontFamily: 'Inter_700Bold',
   },
-  searchBarContainer: {
-    marginTop: 8,
-    marginBottom: 16,
+  iconsPlaceholder: {
+    width: 90,
+    height: 40,
   },
-  searchBar: {
+  searchBarRow: {
+    paddingTop: 16,
+  },
+  searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 24,
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  searchIcon: {
-    marginRight: 10,
+    paddingVertical: 12,
   },
   searchInput: {
     flex: 1,
-    height: 24,
+    fontSize: 16,
     color: '#FFFFFF',
-    fontSize: 15,
+    marginLeft: 12,
     fontFamily: 'Inter_400Regular',
   },
   tabsContainer: {

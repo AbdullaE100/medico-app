@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Tabs } from 'expo-router';
+import { Tabs, usePathname } from 'expo-router';
 import { Chrome as Home, Users, MessageCircle, MessagesSquare, Bell, User } from 'lucide-react-native';
 import { Platform, View, StyleSheet, ActivityIndicator, SafeAreaView, StatusBar } from 'react-native';
 import { useAuthStore } from '@/stores/useAuthStore';
@@ -19,6 +19,10 @@ export default function TabLayout() {
   const { fetchDiscussions, fetchCategories } = useDiscussionsStore();
   const { fetchChats } = useChatStore();
   const { fetchNotifications, unreadCount } = useNotificationsStore();
+  const pathname = usePathname();
+  
+  // Check if we're on the home page
+  const isHomePage = pathname === '/' || pathname === '/home' || pathname === '/home/index';
   
   // Add state to track if initial loading is complete
   const [isInitialized, setIsInitialized] = useState(false);
@@ -89,12 +93,10 @@ export default function TabLayout() {
   return (
     <>
       {/* Header Icons - Profile and Notification */}
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.headerIconsContainer}>
-          <View style={styles.iconGroup}>
-            <NotificationBell inHeader={true} />
-            <ProfileIconHeader inHeader={true} />
-          </View>
+      <SafeAreaView style={[styles.safeArea, isHomePage && styles.safeAreaHome]}>
+        <View style={[styles.headerIconsContainer, isHomePage && styles.headerIconsContainerHome]}>
+          <NotificationBell inHeader={true} />
+          <ProfileIconHeader inHeader={true} />
         </View>
       </SafeAreaView>
       
@@ -198,19 +200,26 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 1000,
-    height: Platform.OS === 'ios' ? 44 : StatusBar.currentHeight || 24,
+  },
+  safeAreaHome: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 8 : 4,
+    right: 16,
+    left: undefined,
+    width: 'auto',
+    zIndex: 2000,
   },
   headerIconsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    paddingTop: Platform.OS === 'ios' ? 4 : 0,
+    paddingTop: Platform.OS === 'ios' ? 46 : StatusBar.currentHeight || 24,
     paddingRight: 16,
-    backgroundColor: 'transparent',
+    paddingBottom: 8,
   },
-  iconGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+  headerIconsContainerHome: {
+    paddingTop: 0,
+    paddingRight: 0,
+    paddingBottom: 0,
   }
 });
