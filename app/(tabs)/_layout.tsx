@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Tabs, usePathname } from 'expo-router';
-import { Chrome as Home, Users, MessageCircle, MessagesSquare, Bell, User } from 'lucide-react-native';
-import { Platform, View, StyleSheet, ActivityIndicator, SafeAreaView, StatusBar } from 'react-native';
+import { Chrome as Home, Users, MessagesSquare, Bell, User, Plus } from 'lucide-react-native';
+import { Platform, View, StyleSheet, ActivityIndicator, SafeAreaView, StatusBar, Text } from 'react-native';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useFeedStore } from '@/stores/useFeedStore';
 import { useNetworkStore } from '@/stores/useNetworkStore';
@@ -11,6 +11,7 @@ import { useNotificationsStore } from '@/stores/useNotificationsStore';
 import ProfileIconHeader from '@/components/ProfileIconHeader';
 import { NotificationBell } from '@/components/NotificationBell';
 import NotificationManager from '@/components/NotificationManager';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function TabLayout() {
   const { isAuthenticated, checkAuth, isLoading } = useAuthStore();
@@ -21,8 +22,15 @@ export default function TabLayout() {
   const { fetchNotifications, unreadCount } = useNotificationsStore();
   const pathname = usePathname();
   
+  useEffect(() => {
+    console.log("Current pathname:", pathname);
+  }, [pathname]);
+  
   // Check if we're on the home page
   const isHomePage = pathname === '/' || pathname === '/home' || pathname === '/home/index';
+  
+  // Check if we're on the create page - hide header icons on create page
+  const isCreatePage = pathname === '/create' || pathname === '/create/index' || pathname.startsWith('/create/');
   
   // Add state to track if initial loading is complete
   const [isInitialized, setIsInitialized] = useState(false);
@@ -90,15 +98,19 @@ export default function TabLayout() {
     );
   }
 
+  console.log("IsCreatePage:", isCreatePage, "Pathname:", pathname);
+
   return (
     <>
-      {/* Header Icons - Profile and Notification */}
-      <SafeAreaView style={[styles.safeArea, isHomePage && styles.safeAreaHome]}>
-        <View style={[styles.headerIconsContainer, isHomePage && styles.headerIconsContainerHome]}>
-          <NotificationBell inHeader={true} />
-          <ProfileIconHeader inHeader={true} />
-        </View>
-      </SafeAreaView>
+      {/* Header Icons - Profile and Notification - Don't show on Create page */}
+      {!isCreatePage && (
+        <SafeAreaView style={[styles.safeArea, isHomePage && styles.safeAreaHome]} pointerEvents="box-none">
+          <View style={[styles.headerIconsContainer, isHomePage && styles.headerIconsContainerHome]}>
+            <NotificationBell inHeader={true} />
+            <ProfileIconHeader inHeader={true} />
+          </View>
+        </SafeAreaView>
+      )}
       
       {/* Notification Manager for handling push notifications and toasts */}
       <NotificationManager />
@@ -152,10 +164,20 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
-          name="discussions"
+          name="create"
           options={{
-            title: 'Discuss',
-            tabBarIcon: ({ color, size }) => <MessageCircle size={size} color={color} />,
+            title: 'Create',
+            headerShown: false,
+            tabBarIcon: ({ color, size }) => (
+              <View style={styles.createTabIcon}>
+                <LinearGradient
+                  colors={['#0066CC', '#1a82ff']}
+                  style={styles.createIconGradient}
+                >
+                  <Plus size={size-2} color="#FFFFFF" />
+                </LinearGradient>
+              </View>
+            ),
           }}
         />
         <Tabs.Screen
@@ -221,5 +243,25 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingRight: 0,
     paddingBottom: 0,
+  },
+  createTabIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Platform.OS === 'ios' ? 16 : 0,
+  },
+  createIconGradient: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0066CC',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   }
 });

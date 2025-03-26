@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TextInput, Pressable, FlatList, RefreshControl, ActivityIndicator, Animated, Alert, Modal, Dimensions, StatusBar, Platform, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TextInput, Pressable, FlatList, RefreshControl, ActivityIndicator, Animated, Alert, Modal, Dimensions, StatusBar, Platform, TouchableOpacity, useWindowDimensions, SafeAreaView } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { Heart, MessageCircle, Repeat2, Send, Search, TrendingUp, Plus, Trash2, Bookmark, ChevronRight, Sparkles, Flag, Edit2, Share } from 'lucide-react-native';
 import { useFeedStore, Post } from '@/stores/useFeedStore';
@@ -7,6 +7,9 @@ import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { supabase } from '@/lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
+import Logo from '@/components/Logo';
+import { formatDistanceToNow } from 'date-fns';
+import * as Haptics from 'expo-haptics';
 
 const { width, height } = Dimensions.get('window');
 
@@ -171,8 +174,8 @@ const PostCard = React.memo(({ post, onOptionPress }: { post: Post, onOptionPres
             <Pressable onPress={handleLike}>
               <Heart 
                 size={20} 
-                color={post.has_liked ? '#FF3040' : '#000000'} 
-                fill={post.has_liked ? '#FF3040' : 'transparent'} 
+                color={post.has_liked_by_me ? '#FF3040' : '#000000'} 
+                fill={post.has_liked_by_me ? '#FF3040' : 'transparent'} 
               />
             </Pressable>
 
@@ -350,372 +353,208 @@ const HomeHeader = () => {
     <View style={styles.headerContainer}>
       <View style={styles.topRow}>
         <View style={styles.logoContainer}>
-          <View style={styles.logoBackground}>
-            <Heart size={24} color="#FFFFFF" />
-          </View>
-          <Text style={styles.title}>MEDICO</Text>
+          <Logo width={120} height={36} />
         </View>
-        
-        {/* This space is intentionally left blank for the icons from _layout.tsx */}
         <View style={styles.iconsPlaceholder} />
       </View>
-      
-      <View style={styles.searchBarRow}>
-        <View style={styles.searchContainer}>
-          <Search size={20} color="#8E8E93" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search topics, hashtags, doctors..."
-            placeholderTextColor="#8E8E93"
-          />
-        </View>
+      <View style={styles.searchContainer}>
+        <Search size={16} color="#666" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search medical topics, posts, and professionals"
+          placeholderTextColor="#999"
+        />
       </View>
     </View>
   );
 };
 
-export default function Feed() {
-  const { 
-    posts, 
-    trendingHashtags,
-    isLoading, 
-    isLoadingMore,
-    hasMorePosts,
-    error, 
-    fetchPosts,
-    loadMorePosts,
-    refreshPosts,
-    fetchTrendingHashtags 
-  } = useFeedStore();
+export default function HomeScreen() {
+  const router = useRouter();
+  const { width } = useWindowDimensions();
+  const { posts, isLoading, error, loadPosts, likePost, unlikePost } = useFeedStore();
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [firstLoad, setFirstLoad] = useState(true);
-  const [activeTab, setActiveTab] = useState('Threads');
-  const [showOptions, setShowOptions] = useState(false);
-  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
-  const router = useRouter();
-  
-  // Animation values
-  const headerHeight = useRef(new Animated.Value(0)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.95)).current;
-  const translateY = useRef(new Animated.Value(30)).current;
-  const heartBeat = useRef(new Animated.Value(1)).current;
 
-  // Initial data fetch - will use cache if available
   useEffect(() => {
-    const loadInitialData = async () => {
-      await Promise.all([
-        fetchPosts({ following: activeTab === 'Following' }),
-        fetchTrendingHashtags()
-      ]);
-      // Set firstLoad to false after initial data fetch
-      setFirstLoad(false);
-    };
-    
-    loadInitialData();
-  }, [activeTab]);
-  
-  // Start animations
-  useEffect(() => {
-    // Start header animation
-    Animated.timing(headerHeight, {
-      toValue: 1,
-      duration: 800,
-      useNativeDriver: false,
-    }).start();
-    
-    // Animate content fade in and scale
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(scaleAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-    ]).start();
-    
-    // Heart animation
-    const pulseHeart = Animated.loop(
-      Animated.sequence([
-        Animated.timing(heartBeat, {
-          toValue: 1.15,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(heartBeat, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.delay(800),
-      ])
-    );
-    
-    pulseHeart.start();
-    
-    return () => {
-      pulseHeart.stop();
-    };
+    loadPosts();
   }, []);
 
-  const handleRefresh = useCallback(async () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    try {
-      await Promise.all([
-        refreshPosts({ following: activeTab === 'Following' }), // Force refresh with correct filter
-        fetchTrendingHashtags()
-      ]);
-    } finally {
-      setRefreshing(false);
-    }
-  }, [refreshPosts, fetchTrendingHashtags, activeTab]);
-
-  const handleLoadMore = useCallback(() => {
-    if (!isLoadingMore && hasMorePosts) {
-      loadMorePosts({ following: activeTab === 'Following' });
-    }
-  }, [isLoadingMore, hasMorePosts, loadMorePosts, activeTab]);
-
-  const handleSearch = useCallback(async (query: string) => {
-    setSearchQuery(query);
-    // Implement search functionality
-  }, []);
-  
-  // Handler for tab change
-  const handleTabChange = useCallback(async (tab: string) => {
-    setActiveTab(tab);
-    setFirstLoad(true);
-    await fetchPosts({ 
-      forceRefresh: true, 
-      following: tab === 'Following'
-    });
-    setFirstLoad(false);
-  }, [fetchPosts]);
-  
-  const handleOptionPress = (post: Post) => {
-    setSelectedPost(post);
-    setShowOptions(true);
+    await loadPosts();
+    setRefreshing(false);
   };
 
-  const interpolatedHeaderHeight = headerHeight.interpolate({
-    inputRange: [0, 1],
-    outputRange: [70, Platform.OS === 'ios' ? 120 : 100]
-  });
+  const handlePostPress = (postId: string) => {
+    router.push(`/post/${postId}`);
+  };
 
-  // Render footer for FlatList (loading indicator when loading more posts)
-  const renderFooter = useMemo(() => {
-    if (!isLoadingMore) return null;
+  const handleLikePress = (postId: string) => {
+    // Get the post and toggle like status
+    const post = posts.find(p => p.id === postId);
+    if (post) {
+      if (post.is_liked_by_me) {
+        unlikePost(postId);
+      } else {
+        likePost(postId);
+      }
+      
+      // Trigger haptic feedback
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
+  const renderPostItem = ({ item }: { item: Post }) => {
+    const formattedDate = item.created_at 
+      ? formatDistanceToNow(new Date(item.created_at))
+      : '';
+    
+    // Skip rendering if post ID is missing
+    if (!item.id) return null;
     
     return (
-      <View style={styles.loadingMoreContainer}>
-        <ActivityIndicator size="small" color="#0066CC" />
-        <Text style={styles.loadingMoreText}>Loading more posts...</Text>
-      </View>
-    );
-  }, [isLoadingMore]);
-  
-  // Render placeholder content while loading
-  const renderPlaceholderContent = useMemo(() => {
-    return (
-      <>
-        <View style={styles.trendingSection}>
-          <View style={styles.trendingHeader}>
-            <TrendingUp size={20} color="#0066CC" />
-            <Text style={styles.trendingTitle}>Trending Topics</Text>
+      <TouchableOpacity 
+        style={styles.postContainer}
+        activeOpacity={0.9}
+        onPress={() => handlePostPress(item.id as string)}
+      >
+        <View style={styles.postHeader}>
+          <View style={styles.profileInfo}>
+            {item.profile?.avatar_url ? (
+              <Image 
+                source={{ uri: item.profile.avatar_url }} 
+                style={styles.avatar} 
+              />
+            ) : (
+              <View style={[styles.avatar, styles.placeholderAvatar]}>
+                <Text style={styles.avatarText}>
+                  {item.profile?.full_name?.charAt(0) || '?'}
+                </Text>
+              </View>
+            )}
+            <View style={styles.nameContainer}>
+              <Text style={styles.fullName}>{item.profile?.full_name || 'Unknown User'}</Text>
+              <Text style={styles.timeAgo}>{formattedDate}</Text>
+            </View>
           </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.trendingContainer}>
-            {[1, 2, 3, 4, 5].map((_, index) => (
-              <View key={index} style={[styles.trendingHashtagSkeleton, styles.skeleton]} />
-            ))}
-          </ScrollView>
         </View>
         
-        {[1, 2, 3].map((_, index) => (
-          <PostSkeleton key={index} />
-        ))}
-      </>
-    );
-  }, []);
-  
-  // Memoize the list header component to prevent unnecessary re-renders
-  const ListHeaderComponent = useMemo(() => (
-    <View>
-      <View style={styles.trendingSection}>
-        <View style={styles.trendingHeader}>
-          <TrendingUp size={20} color="#0066CC" />
-          <Text style={styles.trendingTitle}>Trending Topics</Text>
+        <Text style={styles.postContent}>{item.content}</Text>
+        
+        {item.media_url && item.media_url.length > 0 && (
+          <View style={styles.mediaContainer}>
+            <Image
+              source={{ uri: item.media_url[0] }}
+              style={[styles.mediaImage, { width: width - 32 }]}
+              resizeMode="cover"
+            />
+            {item.media_url.length > 1 && (
+              <View style={styles.moreImagesIndicator}>
+                <Text style={styles.moreImagesText}>+{item.media_url.length - 1}</Text>
+              </View>
+            )}
+          </View>
+        )}
+        
+        {item.hashtags && item.hashtags.length > 0 && (
+          <View style={styles.hashtagsContainer}>
+            {item.hashtags.map((tag, index) => (
+              <Text key={index} style={styles.hashtag}>#{tag}</Text>
+            ))}
+          </View>
+        )}
+        
+        <View style={styles.postActions}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => handleLikePress(item.id as string)}
+          >
+            <Heart 
+              size={20} 
+              color={item.is_liked_by_me ? '#FF3B30' : '#666'} 
+              fill={item.is_liked_by_me ? '#FF3B30' : 'transparent'} 
+            />
+            {(item.likes_count && item.likes_count > 0) ? (
+              <Text style={styles.actionCount}>{item.likes_count}</Text>
+            ) : null}
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => handlePostPress(item.id as string)}
+          >
+            <MessageCircle size={20} color="#666" />
+            {(item.comments_count && item.comments_count > 0) ? (
+              <Text style={styles.actionCount}>{item.comments_count}</Text>
+            ) : null}
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.actionButton}>
+            <Repeat2 size={20} color="#666" />
+            {(item.reposts_count && item.reposts_count > 0) ? (
+              <Text style={styles.actionCount}>{item.reposts_count}</Text>
+            ) : null}
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.actionButton}>
+            <Share size={20} color="#666" />
+          </TouchableOpacity>
         </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.trendingContainer}>
-          {trendingHashtags.length > 0 
-            ? trendingHashtags.map((hashtag) => (
-                <TrendingHashtag key={hashtag.name} hashtag={hashtag} />
-              ))
-            : (firstLoad || isLoading) && [1, 2, 3, 4, 5].map((_, index) => (
-                <View key={index} style={[styles.trendingHashtagSkeleton, styles.skeleton]} />
-              ))
-          }
-        </ScrollView>
-      </View>
-    </View>
-  ), [trendingHashtags, firstLoad, isLoading]);
-  
-  // Memoize the empty component to prevent unnecessary re-renders
-  const ListEmptyComponent = useMemo(() => {
-    if (firstLoad || isLoading) {
-      return renderPlaceholderContent;
-    }
-    
-    return (
-      <View style={styles.emptyState}>
-        <Text style={styles.emptyStateText}>
-          {activeTab === 'Following' ? 'No posts from people you follow' : 'No posts yet'}
-        </Text>
-        <Text style={styles.emptyStateSubtext}>
-          {activeTab === 'Following' 
-            ? 'Follow some doctors to see their posts here'
-            : 'Follow doctors or create your first post'
-          }
-        </Text>
-      </View>
+      </TouchableOpacity>
     );
-  }, [firstLoad, isLoading, renderPlaceholderContent, activeTab]);
+  };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+    <SafeAreaView style={styles.container}>
+      <HomeHeader />
       
-      {/* Use custom header instead of the one with conflicting icons */}
-      <LinearGradient
-        colors={['#004080', '#0066CC']}
-        style={styles.headerBackground}
-      >
-        <HomeHeader />
-      </LinearGradient>
-      
-      {error && (
-        <ErrorMessage 
-          message={error} 
-          onDismiss={() => useFeedStore.setState({ error: null })}
-        />
-      )}
-
-      <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
+      {isLoading && !refreshing ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#0066CC" />
+        </View>
+      ) : error ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity 
+            style={styles.retryButton}
+            onPress={loadPosts}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
         <FlatList
           data={posts}
-          renderItem={({ item }) => <PostCard post={item} onOptionPress={() => handleOptionPress(item)} />}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.feed}
-          showsVerticalScrollIndicator={false}
+          renderItem={renderPostItem}
+          keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+          contentContainerStyle={styles.feedContainer}
           refreshControl={
-            <RefreshControl 
-              refreshing={refreshing} 
-              onRefresh={handleRefresh} 
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#0066CC']}
               tintColor="#0066CC"
             />
           }
-          onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.5}
-          ListFooterComponent={renderFooter}
-          // Performance optimizations
-          removeClippedSubviews={true}
-          maxToRenderPerBatch={5}
-          windowSize={10}
-          initialNumToRender={5}
-          updateCellsBatchingPeriod={50}
-          ListHeaderComponent={activeTab === 'Threads' ? ListHeaderComponent : null}
-          ListEmptyComponent={ListEmptyComponent}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyTitle}>No posts yet</Text>
+              <Text style={styles.emptyDescription}>
+                Be the first to create a post in your medical community
+              </Text>
+              <TouchableOpacity 
+                style={styles.createPostButton}
+                onPress={() => router.push('/create')}
+              >
+                <Plus size={18} color="#FFFFFF" />
+                <Text style={styles.createPostButtonText}>Create Post</Text>
+              </TouchableOpacity>
+            </View>
+          }
         />
-      </Animated.View>
-
-      <Link href="/home/create" asChild>
-        <Pressable style={styles.fab}>
-          <LinearGradient
-            colors={['#1a82ff', '#0066CC']}
-            style={styles.fabGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <Plus size={24} color="#FFFFFF" />
-          </LinearGradient>
-        </Pressable>
-      </Link>
-
-      {/* Post Options Modal */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={showOptions}
-        onRequestClose={() => setShowOptions(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowOptions(false)}
-        >
-          <View style={styles.menuContainer}>
-            <TouchableOpacity 
-              style={styles.menuItem}
-              onPress={() => {
-                setShowOptions(false);
-                // Add share functionality
-              }}
-            >
-              <Share size={20} color="#0066CC" />
-              <Text style={styles.menuItemText}>Share</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.menuItem}
-              onPress={() => {
-                setShowOptions(false);
-                // Navigate to edit post screen
-              }}
-            >
-              <Edit2 size={20} color="#0066CC" />
-              <Text style={styles.menuItemText}>Edit</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.menuItem}
-              onPress={() => {
-                setShowOptions(false);
-                // Add delete functionality
-              }}
-            >
-              <Trash2 size={20} color="#FF3040" />
-              <Text style={styles.menuItemTextDelete}>Delete</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.menuItem}
-              onPress={() => {
-                setShowOptions(false);
-                // Add report functionality
-              }}
-            >
-              <Flag size={20} color="#0066CC" />
-              <Text style={styles.menuItemText}>Report</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-    </View>
+      )}
+    </SafeAreaView>
   );
 }
 
@@ -724,398 +563,219 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8F9FA',
   },
-  headerBackground: {
-    width: '100%',
-  },
   headerContainer: {
+    backgroundColor: '#FFFFFF',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 50 : 30,
-    paddingBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EBEBEB',
   },
   topRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    width: '100%',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  logoBackground: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FF5A5F',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    fontFamily: 'Inter_700Bold',
+    flex: 1,
   },
   iconsPlaceholder: {
     width: 90,
-    height: 40,
-  },
-  searchBarRow: {
-    paddingTop: 16,
+    height: 36,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 24,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 25,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    height: 40,
+  },
+  searchIcon: {
+    marginRight: 8,
   },
   searchInput: {
     flex: 1,
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    color: '#333',
+    height: 40,
+  },
+  feedContainer: {
+    paddingBottom: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  errorText: {
     fontSize: 16,
-    color: '#FFFFFF',
-    marginLeft: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 16,
     fontFamily: 'Inter_400Regular',
   },
-  tabsContainer: {
-    flexDirection: 'row',
-    marginTop: Platform.OS === 'ios' ? 120 : 100,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 1,
-    zIndex: 3,
-  },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 16,
-    position: 'relative',
-  },
-  activeTab: {
-    borderBottomWidth: 0,
-  },
-  tabText: {
-    fontSize: 15,
-    fontFamily: 'Inter_600SemiBold',
-    color: '#6B7280',
-  },
-  activeTabText: {
-    color: '#0066CC',
-  },
-  activeTabIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    width: '50%',
-    height: 3,
+  retryButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
     backgroundColor: '#0066CC',
-    borderRadius: 1.5,
+    borderRadius: 25,
   },
-  trendingSection: {
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 16,
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 100,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#333',
     marginBottom: 8,
+  },
+  emptyDescription: {
+    fontSize: 16,
+    fontFamily: 'Inter_400Regular',
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  createPostButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0066CC',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+  },
+  createPostButtonText: {
+    color: '#FFFFFF',
+    marginLeft: 8,
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  postContainer: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    marginHorizontal: 8,
-    marginTop: 8,
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
-    elevation: 1,
-  },
-  trendingHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    gap: 8,
-  },
-  trendingTitle: {
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
-    color: '#1A1A1A',
-  },
-  trendingContainer: {
-    paddingHorizontal: 16,
-    gap: 8,
-    flexDirection: 'row',
-  },
-  trendingHashtag: {
-    backgroundColor: 'rgba(0, 102, 204, 0.08)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 102, 204, 0.15)',
-  },
-  trendingHashtagText: {
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
-    color: '#0066CC',
-  },
-  trendingHashtagCount: {
-    fontSize: 12,
-    fontFamily: 'Inter_400Regular',
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  feed: {
-    padding: 8,
-  },
-  postCard: {
-    borderRadius: 16,
-    marginBottom: 12,
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
     elevation: 2,
-    overflow: 'hidden',
   },
-  postContainer: {
+  postHeader: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  leftColumn: {
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginRight: 12,
+    marginBottom: 12,
   },
-  rightColumn: {
-    flex: 1,
+  profileInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   avatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    borderWidth: 2,
-    borderColor: 'rgba(0, 102, 204, 0.2)',
   },
-  verticalLine: {
-    width: 2,
-    flex: 1,
-    backgroundColor: 'rgba(0, 102, 204, 0.1)',
-    marginVertical: 4,
-  },
-  authorRow: {
-    flexDirection: 'row',
+  placeholderAvatar: {
+    backgroundColor: '#0066CC',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 6,
   },
-  authorName: {
-    fontSize: 15,
+  avatarText: {
+    color: '#FFFFFF',
+    fontSize: 18,
     fontFamily: 'Inter_600SemiBold',
-    color: '#1e293b',
   },
-  spacer: {
-    flex: 1,
+  nameContainer: {
+    marginLeft: 12,
   },
-  timestamp: {
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    color: '#6B7280',
-    marginRight: 8,
-  },
-  moreButton: {
-    padding: 4,
-  },
-  moreButtonText: {
+  fullName: {
+    fontSize: 16,
     fontFamily: 'Inter_600SemiBold',
-    color: '#6B7280',
+    color: '#333',
+  },
+  timeAgo: {
     fontSize: 12,
-    transform: [{ rotate: '90deg' }],
+    fontFamily: 'Inter_400Regular',
+    color: '#666',
   },
   postContent: {
     fontSize: 15,
-    color: '#1e293b',
     fontFamily: 'Inter_400Regular',
+    color: '#333',
     lineHeight: 22,
     marginBottom: 12,
   },
-  postImage: {
-    width: '100%',
-    height: 200,
-    borderRadius: 12,
+  mediaContainer: {
+    position: 'relative',
     marginBottom: 12,
+    borderRadius: 8,
+    overflow: 'hidden',
   },
-  hashtags: {
+  mediaImage: {
+    height: 200,
+    borderRadius: 8,
+  },
+  moreImagesIndicator: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  moreImagesText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  hashtagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
     marginBottom: 12,
   },
   hashtag: {
-    color: '#0066CC',
     fontSize: 14,
     fontFamily: 'Inter_500Medium',
-  },
-  engagement: {
-    flexDirection: 'row',
-    gap: 20,
-    marginTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 102, 204, 0.1)',
-    paddingTop: 12,
-  },
-  engagementInfo: {
-    marginTop: 6,
-  },
-  engagementText: {
-    fontSize: 13,
-    color: '#6B7280',
-    fontFamily: 'Inter_400Regular',
-  },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    shadowColor: '#0066CC',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-    overflow: 'hidden',
-  },
-  fabGradient: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyState: {
-    padding: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    marginTop: 24,
-    marginHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-    paddingVertical: 40,
-  },
-  emptyStateText: {
-    fontSize: 18,
-    fontFamily: 'Inter_600SemiBold',
-    color: '#1e293b',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  emptyStateSubtext: {
-    fontSize: 15,
-    fontFamily: 'Inter_400Regular',
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  skeleton: {
-    backgroundColor: '#E5E5E5',
-    borderRadius: 4,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  nameSkeleton: {
-    width: 100,
-    height: 16,
-    marginBottom: 8,
-  },
-  specialtySkeleton: {
-    width: 80,
-    height: 12,
+    color: '#0066CC',
+    marginRight: 8,
     marginBottom: 4,
   },
-  timestampSkeleton: {
-    width: 40,
-    height: 12,
-  },
-  contentSkeleton: {
-    height: 18,
-    marginBottom: 8,
-    width: '100%',
-  },
-  contentSkeletonShort: {
-    height: 18,
-    marginBottom: 12,
-    width: '70%',
-  },
-  iconSkeleton: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-  },
-  trendingHashtagSkeleton: {
-    width: 120,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 8,
-  },
-  loadingMoreContainer: {
-    padding: 16,
-    alignItems: 'center',
+  postActions: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: '#EBEBEB',
+    paddingTop: 12,
   },
-  loadingMoreText: {
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 4,
+  },
+  actionCount: {
+    marginLeft: 4,
     fontSize: 14,
-    color: '#0066CC',
-    marginLeft: 8,
-    fontFamily: 'Inter_400Regular',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  menuContainer: {
-    width: '80%',
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 16,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 102, 204, 0.1)',
-  },
-  menuItemText: {
-    fontSize: 16,
     fontFamily: 'Inter_500Medium',
-    color: '#1e293b',
-    marginLeft: 12,
-  },
-  menuItemTextDelete: {
-    fontSize: 16,
-    fontFamily: 'Inter_500Medium',
-    color: '#FF3040',
-    marginLeft: 12,
+    color: '#666',
   },
 });

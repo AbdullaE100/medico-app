@@ -1,28 +1,27 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
+import { useAuthStore } from './useAuthStore';
 
 export interface Post {
-  id: string;
-  author_id: string;
+  id?: string;
+  user_id?: string;
   content: string;
-  media_url: string[];
-  hashtags: string[];
-  likes_count: number;
-  comments_count: number;
-  reposts_count: number;
-  is_repost: boolean;
-  original_post_id: string | null;
-  created_at: string;
-  updated_at: string;
-  author?: {
+  media_url?: string[];
+  hashtags?: string[];
+  visibility?: 'public' | 'followers';
+  created_at?: string;
+  updated_at?: string;
+  profile?: {
+    id: string;
     full_name: string;
-    avatar_url: string;
-    specialty: string;
-    hospital: string;
-    verified?: boolean;
+    avatar_url?: string;
   };
-  has_liked?: boolean;
-  has_reposted?: boolean;
+  likes_count?: number;
+  comments_count?: number;
+  reposts_count?: number;
+  is_liked_by_me?: boolean;
+  is_repost?: boolean;
+  original_post_id?: string | null;
 }
 
 export interface Comment {
@@ -80,15 +79,17 @@ interface FeedState {
     following?: boolean;
     forceRefresh?: boolean;
   }) => Promise<void>;
-  createPost: (content: string, hashtags?: string[], mediaUrls?: string[]) => Promise<void>;
+  createPost: (post: Omit<Post, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => Promise<void>;
   deletePost: (postId: string) => Promise<boolean>;
   likePost: (postId: string) => Promise<void>;
+  unlikePost: (postId: string) => Promise<void>;
   repostPost: (postId: string, content?: string) => Promise<void>;
   fetchTrendingHashtags: () => Promise<void>;
   fetchComments: (postId: string) => Promise<Comment[]>;
   createComment: (postId: string, content: string, parentId?: string) => Promise<void>;
   likeComment: (commentId: string) => Promise<void>;
   repostComment: (commentId: string, content?: string) => Promise<void>;
+  loadPosts: () => Promise<void>;
 }
 
 // Number of posts to fetch per page
@@ -297,26 +298,76 @@ export const useFeedStore = create<FeedStore>((set, get) => ({
     return get().fetchPosts({ ...options, forceRefresh: true });
   },
 
-  createPost: async (content, hashtags = [], mediaUrls = []) => {
+  createPost: async (postData) => {
+    set({ isLoading: true, error: null });
+    
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      const { error } = await supabase
+      const { currentUser } = useAuthStore.getState();
+      
+      if (!currentUser) {
+        throw new Error('You must be logged in to create a post');
+      }
+      
+      console.log('Creating post with author_id:', currentUser.id);
+      console.log('Post data:', JSON.stringify(postData));
+      
+      // Construct the post with proper field names, excluding visibility which doesn't exist
+      const newPost = {
+        author_id: currentUser.id,
+        content: postData.content,
+        media_url: postData.media_url || [],
+        hashtags: postData.hashtags || [],
+        // Remove visibility field as it doesn't exist in the schema
+      };
+      
+      console.log('Submitting new post:', JSON.stringify(newPost));
+      
+      const { data, error } = await supabase
         .from('posts')
-        .insert({
-          author_id: user.id,
-          content,
-          hashtags,
-          media_url: mediaUrls
-        });
-
-      if (error) throw error;
-
-      // Refresh feed
-      await get().fetchPosts();
-    } catch (error) {
-      set({ error: (error as Error).message });
+        .insert(newPost)
+        .select(`
+          *,
+          profile:profiles!posts_author_id_fkey(
+            id, 
+            full_name, 
+            avatar_url
+          )
+        `)
+        .single();
+        
+      if (error) {
+        console.error('Post creation error details:', error);
+        if (error.code) console.error('Error code:', error.code);
+        if (error.details) console.error('Error details:', error.details);
+        if (error.hint) console.error('Error hint:', error.hint);
+        
+        throw error;
+      }
+      
+      if (!data) {
+        console.error('No data returned from post creation');
+        throw new Error('Failed to create post - no data returned');
+      }
+      
+      console.log('Post created successfully, data:', data);
+      
+      // Add the new post to the local state
+      set((state) => ({ 
+        posts: [data, ...state.posts],
+        isLoading: false
+      }));
+      
+      return data;
+    } catch (error: any) {
+      console.error('Error creating post:', error);
+      if (error.details) console.error('Error details:', error.details);
+      if (error.hint) console.error('Error hint:', error.hint);
+      
+      set({ 
+        error: error.message || 'Failed to create post', 
+        isLoading: false 
+      });
+      throw error;
     }
   },
 
@@ -362,53 +413,123 @@ export const useFeedStore = create<FeedStore>((set, get) => ({
 
   likePost: async (postId) => {
     try {
-      await supabase.rpc('like_post', { p_post_id: postId });
-
-      // Optimistic update
-      set(state => ({
-        posts: state.posts.map(post =>
-          post.id === postId
-            ? {
-                ...post,
-                likes_count: post.has_liked
-                  ? post.likes_count - 1
-                  : post.likes_count + 1,
-                has_liked: !post.has_liked
+      const { currentUser } = useAuthStore.getState();
+      
+      if (!currentUser) {
+        throw new Error('You must be logged in to like a post');
+      }
+      
+      // Add like to post_likes table
+      const { error } = await supabase
+        .from('post_likes')
+        .insert({
+          user_id: currentUser.id,
+          post_id: postId
+        });
+        
+      if (error) throw error;
+      
+      // Update local state
+      set((state) => ({
+        posts: state.posts.map(post => 
+          post.id === postId 
+            ? { 
+                ...post, 
+                likes_count: (post.likes_count || 0) + 1,
+                is_liked_by_me: true
               }
             : post
         )
       }));
-    } catch (error) {
-      set({ error: (error as Error).message });
+      
+    } catch (error: any) {
+      console.error('Error liking post:', error);
     }
   },
 
-  repostPost: async (postId, content?) => {
+  unlikePost: async (postId) => {
     try {
-      await supabase.rpc('repost_post', {
-        p_post_id: postId,
-        p_content: content
-      });
-
-      // Optimistic update
-      set(state => ({
-        posts: state.posts.map(post =>
-          post.id === postId
-            ? {
-                ...post,
-                reposts_count: post.has_reposted
-                  ? post.reposts_count - 1
-                  : post.reposts_count + 1,
-                has_reposted: !post.has_reposted
+      const { currentUser } = useAuthStore.getState();
+      
+      if (!currentUser) {
+        throw new Error('You must be logged in to unlike a post');
+      }
+      
+      // Remove like from post_likes table
+      const { error } = await supabase
+        .from('post_likes')
+        .delete()
+        .eq('user_id', currentUser.id)
+        .eq('post_id', postId);
+        
+      if (error) throw error;
+      
+      // Update local state
+      set((state) => ({
+        posts: state.posts.map(post => 
+          post.id === postId 
+            ? { 
+                ...post, 
+                likes_count: Math.max((post.likes_count || 0) - 1, 0),
+                is_liked_by_me: false
               }
             : post
         )
       }));
+      
+    } catch (error: any) {
+      console.error('Error unliking post:', error);
+    }
+  },
 
-      // Refresh feed to show the repost
-      await get().fetchPosts();
-    } catch (error) {
-      set({ error: (error as Error).message });
+  repostPost: async (postId, content = '') => {
+    try {
+      const { currentUser } = useAuthStore.getState();
+      
+      if (!currentUser) {
+        throw new Error('You must be logged in to repost');
+      }
+      
+      // Create a new post that references the original
+      const newRepost = {
+        user_id: currentUser.id,
+        content: content,
+        is_repost: true,
+        original_post_id: postId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        visibility: 'public' as const
+      };
+      
+      const { data, error } = await supabase
+        .from('posts')
+        .insert(newRepost)
+        .select('*, profile:profiles(id, full_name, avatar_url)')
+        .single();
+        
+      if (error) throw error;
+      
+      // Update the repost count on the original post in our local state
+      set((state) => ({
+        posts: state.posts.map(post => 
+          post.id === postId 
+            ? { 
+                ...post, 
+                reposts_count: (post.reposts_count || 0) + 1
+              }
+            : post
+        )
+      }));
+      
+      // Add the new repost to our local state
+      if (data) {
+        set((state) => ({ 
+          posts: [data, ...state.posts]
+        }));
+      }
+      
+    } catch (error: any) {
+      console.error('Error reposting:', error);
     }
   },
 
@@ -595,5 +716,63 @@ export const useFeedStore = create<FeedStore>((set, get) => ({
     } catch (error) {
       set({ error: (error as Error).message });
     }
-  }
+  },
+
+  loadPosts: async () => {
+    set({ isLoading: true, error: null });
+    
+    try {
+      const { currentUser } = useAuthStore.getState();
+      
+      if (!currentUser) {
+        throw new Error('You must be logged in to load posts');
+      }
+      
+      // First get the relationship details to debug
+      console.log('Fetching posts with correct relationship...');
+      
+      const { data, error } = await supabase
+        .from('posts')
+        .select(`
+          *,
+          profile:profiles!posts_author_id_fkey(id, full_name, avatar_url),
+          likes_count,
+          comments_count,
+          reposts_count
+        `)
+        .order('created_at', { ascending: false });
+        
+      if (error) {
+        console.error('Query error details:', error);
+        throw error;
+      }
+      
+      // Check which posts are liked by the current user
+      const { data: likedPosts, error: likedError } = await supabase
+        .from('post_likes')
+        .select('post_id')
+        .eq('user_id', currentUser.id);
+        
+      if (likedError) throw likedError;
+      
+      const likedPostIds = likedPosts?.map(like => like.post_id) || [];
+      
+      const postsWithLikeStatus = data.map(post => ({
+        ...post,
+        is_liked_by_me: likedPostIds.includes(post.id)
+      }));
+      
+      set({ 
+        posts: postsWithLikeStatus, 
+        isLoading: false 
+      });
+      
+    } catch (error: any) {
+      console.error('Error loading posts:', error);
+      set({ 
+        error: error.message || 'Failed to load posts', 
+        isLoading: false 
+      });
+    }
+  },
 }));
