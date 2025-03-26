@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Bell } from 'lucide-react-native';
 import { useNotificationsStore } from '@/stores/useNotificationsStore';
-import NotificationSlidingPanel from './NotificationSlidingPanel';
+import NotificationSlidingPanel from '@/components/NotificationSlidingPanel';
 
 const { width } = Dimensions.get('window');
 
@@ -94,7 +94,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ inHeader = f
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <View style={styles.iconBackground}>
-              <Bell size={22} color="#333333" />
+              <Bell size={22} color="#FFFFFF" />
               {unreadCount > 0 && (
                 <View style={styles.badge} />
               )}
@@ -130,7 +130,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ inHeader = f
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <View style={styles.iconBackground}>
-              <Bell size={22} color="#333333" />
+              <Bell size={22} color="#FFFFFF" />
               {unreadCount > 0 && (
                 <View style={styles.badge} />
               )}
@@ -170,30 +170,36 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   iconContainerInline: {
-    width: 40,
-    height: 40,
+    width: 42,
+    height: 42,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
+    marginRight: 12,
   },
   iconButton: {
     width: '100%',
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
   },
   iconBackground: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#0066CC',
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
   },
   badge: {
     position: 'absolute',
-    top: 2,
-    right: 2,
+    top: -2,
+    right: -2,
     width: 10,
     height: 10,
     borderRadius: 5,

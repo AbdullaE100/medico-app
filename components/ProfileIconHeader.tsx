@@ -216,7 +216,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   iconContainerInline: {
-    marginLeft: 'auto',
+    width: 42,
+    height: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
     overflow: 'hidden',
   },
   iconButton: {
@@ -227,9 +230,9 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   iconGradient: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { Chrome as Home, Users, MessageCircle, MessagesSquare, Bell, User } from 'lucide-react-native';
-import { Platform, View, StyleSheet, ActivityIndicator } from 'react-native';
+import { Platform, View, StyleSheet, ActivityIndicator, SafeAreaView, StatusBar } from 'react-native';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useFeedStore } from '@/stores/useFeedStore';
 import { useNetworkStore } from '@/stores/useNetworkStore';
@@ -89,10 +89,14 @@ export default function TabLayout() {
   return (
     <>
       {/* Header Icons - Profile and Notification */}
-      <View style={styles.headerIconsContainer}>
-        <NotificationBell />
-        <ProfileIconHeader />
-      </View>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.headerIconsContainer}>
+          <View style={styles.iconGroup}>
+            <NotificationBell inHeader={true} />
+            <ProfileIconHeader inHeader={true} />
+          </View>
+        </View>
+      </SafeAreaView>
       
       {/* Notification Manager for handling push notifications and toasts */}
       <NotificationManager />
@@ -188,12 +192,26 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
-  headerIconsContainer: {
+  safeArea: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 24,
-    right: 16,
-    zIndex: 100,
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+  },
+  headerIconsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingTop: Platform.OS === 'ios' ? 48 : StatusBar.currentHeight || 24,
+    paddingRight: 16,
+    paddingBottom: 8,
+    backgroundColor: 'transparent',
+    height: Platform.OS === 'ios' ? 95 : 70,
+  },
+  iconGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   }
 });
