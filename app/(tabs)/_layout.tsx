@@ -1,3 +1,4 @@
+import React, { useEffect, useState, memo } from 'react';
 import { Tabs } from 'expo-router';
 import { Chrome as Home, Users, MessageCircle, MessagesSquare, Bell, User } from 'lucide-react-native';
 import { Platform, View, StyleSheet, ActivityIndicator } from 'react-native';
@@ -7,7 +8,7 @@ import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useDiscussionsStore } from '@/stores/useDiscussionsStore';
 import { useChatStore } from '@/stores/useChatStore';
 import { useNotificationsStore } from '@/stores/useNotificationsStore';
-import { useEffect, useState, memo } from 'react';
+import ProfileIconHeader from '@/components/ProfileIconHeader';
 
 export default function TabLayout() {
   const { isAuthenticated, checkAuth, isLoading } = useAuthStore();
@@ -84,86 +85,93 @@ export default function TabLayout() {
   }
 
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: '#0066CC',
-        tabBarInactiveTintColor: '#666666',
-        tabBarStyle: {
-          borderTopWidth: 1,
-          borderTopColor: '#E5E5E5',
-          height: Platform.OS === 'ios' ? 90 : 60,
-          paddingBottom: Platform.OS === 'ios' ? 30 : 8,
-          paddingTop: 8,
-        },
-        headerShown: false,
-        headerStyle: {
-          backgroundColor: '#FFFFFF',
-        },
-        headerTitleStyle: {
-          fontFamily: 'Inter_600SemiBold',
-        },
-        // Show labels for better UX
-        tabBarShowLabel: true,
-        // Lazy load tabs for better initial load time
-        lazy: true,
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          // Fix: href and tabBarButton cannot be used together
-          // Use tabBarItemStyle to hide the tab instead
-          tabBarItemStyle: { display: 'none' },
-          // Keep the tab accessible but not visible
-          headerShown: false
-        }}
-      />
-      <Tabs.Screen
-        name="home"
-        options={{
-          title: 'Home',
-          headerShown: false,
-          tabBarIcon: ({ color, size }) => <Home size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="network"
-        options={{
-          title: 'Network',
-          tabBarIcon: ({ color, size }) => <Users size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="discussions"
-        options={{
-          title: 'Discuss',
-          tabBarIcon: ({ color, size }) => <MessageCircle size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="chat"
-        options={{
-          title: 'Chat',
-          tabBarIcon: ({ color, size }) => <MessagesSquare size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="notifications"
-        options={{
-          title: 'Alerts',
-          tabBarIcon: ({ color, size }) => <Bell size={size} color={color} />,
-          tabBarBadge: unreadCount || undefined,
-          tabBarBadgeStyle: {
-            backgroundColor: '#0066CC',
+    <>
+      {/* Single ProfileIconHeader for the entire app */}
+      <ProfileIconHeader />
+      <Tabs
+        screenOptions={{
+          tabBarActiveTintColor: '#0066CC',
+          tabBarInactiveTintColor: '#666666',
+          tabBarStyle: {
+            borderTopWidth: 1,
+            borderTopColor: '#E5E5E5',
+            height: Platform.OS === 'ios' ? 90 : 60,
+            paddingBottom: Platform.OS === 'ios' ? 30 : 8,
+            paddingTop: 8,
           },
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
-        }}
-      />
-    </Tabs>
+          headerShown: false,
+          headerStyle: {
+            backgroundColor: '#FFFFFF',
+          },
+          headerTitleStyle: {
+            fontFamily: 'Inter_600SemiBold',
+          },
+          // Show labels for better UX
+          tabBarShowLabel: true,
+          // Lazy load tabs for better initial load time
+          lazy: true,
+        }}>
+        <Tabs.Screen
+          name="index"
+          options={{
+            // Fix: href and tabBarButton cannot be used together
+            // Use tabBarItemStyle to hide the tab instead
+            tabBarItemStyle: { display: 'none' },
+            // Keep the tab accessible but not visible
+            headerShown: false
+          }}
+        />
+        <Tabs.Screen
+          name="home"
+          options={{
+            title: 'Home',
+            headerShown: false,
+            tabBarIcon: ({ color, size }) => <Home size={size} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="network"
+          options={{
+            title: 'Network',
+            tabBarIcon: ({ color, size }) => <Users size={size} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="discussions"
+          options={{
+            title: 'Discuss',
+            tabBarIcon: ({ color, size }) => <MessageCircle size={size} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="chat"
+          options={{
+            title: 'Chat',
+            tabBarIcon: ({ color, size }) => <MessagesSquare size={size} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="notifications"
+          options={{
+            title: 'Alerts',
+            tabBarIcon: ({ color, size }) => <Bell size={size} color={color} />,
+            tabBarBadge: unreadCount || undefined,
+            tabBarBadgeStyle: {
+              backgroundColor: '#0066CC',
+            },
+          }}
+        />
+        <Tabs.Screen
+          name="profile"
+          options={{
+            title: 'Profile',
+            tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
+            // Hide profile tab from bottom navigation
+            tabBarItemStyle: { display: 'none' },
+            // Keep it accessible through the profile icon header
+          }}
+        />
+      </Tabs>
+    </>
   );
 }

@@ -19,6 +19,10 @@ export interface Profile {
   posts_count: number;
   created_at: string;
   updated_at: string;
+  // Additional professional metrics
+  years_experience?: string | number;
+  rating?: string | number;
+  patients_count?: string | number;
   // Connection status for UI display (added at runtime)
   connection_status?: 'none' | 'pending' | 'connected';
 }

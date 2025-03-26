@@ -186,16 +186,20 @@ export default function DoctorDirectory() {
           { height: interpolatedHeaderHeight }
         ]}
       >
-        <View style={styles.logoContainer}>
-          <Animated.View 
-            style={[
-              styles.iconContainer,
-              { transform: [{ scale: iconPulse }] }
-            ]}
-          >
-            <Stethoscope size={22} color="#fff" />
-          </Animated.View>
-          <Text style={styles.title}>Medical Network</Text>
+        <View style={styles.headerTopRow}>
+          <View style={styles.logoContainer}>
+            <Animated.View 
+              style={[
+                styles.iconContainer,
+                { transform: [{ scale: iconPulse }] }
+              ]}
+            >
+              <Stethoscope size={22} color="#fff" />
+            </Animated.View>
+            <Animated.View style={styles.titleFade}>
+              <Text style={styles.logo}>Medical Network</Text>
+            </Animated.View>
+          </View>
         </View>
         
         <Animated.View 
@@ -408,6 +412,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     zIndex: 2,
   },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingBottom: 12,
+  },
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -428,7 +439,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  title: {
+  titleFade: {
+    opacity: 0,
+    transform: [{ translateY: 20 }],
+  },
+  logo: {
     fontSize: 22,
     fontFamily: 'Inter_700Bold',
     color: '#FFFFFF',

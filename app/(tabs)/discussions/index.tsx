@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, TextInput, Pressable, FlatList, RefreshControl } from 'react-native';
 import { Link, useRouter } from 'expo-router';
-import { Search, Filter, MapPin, Building2, Users, ChevronRight, UserPlus, UserCheck, CircleAlert as AlertCircle, Plus, MessageCircle } from 'lucide-react-native';
+import { Search, Filter, MapPin, Building2, Users, ChevronRight, UserPlus, UserCheck, AlertCircle, Plus, MessageCircle } from 'lucide-react-native';
 import { useDiscussionsStore } from '@/stores/useDiscussionsStore';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
@@ -121,12 +121,14 @@ export default function DiscussionList() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Medical Discussions</Text>
-        <Link href="/discussions/create" asChild>
-          <Pressable style={styles.newButton}>
-            <Plus size={20} color="#FFFFFF" />
-            <Text style={styles.newButtonText}>New Discussion</Text>
-          </Pressable>
-        </Link>
+        <View style={styles.headerRight}>
+          <Link href="/discussions/create" asChild>
+            <Pressable style={styles.newButton}>
+              <Plus size={20} color="#FFFFFF" />
+              <Text style={styles.newButtonText}>New Discussion</Text>
+            </Pressable>
+          </Link>
+        </View>
       </View>
 
       <View style={styles.searchContainer}>
@@ -215,6 +217,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontFamily: 'Inter_600SemiBold',
     color: '#1A1A1A',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   newButton: {
     flexDirection: 'row',

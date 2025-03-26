@@ -592,16 +592,18 @@ export default function Feed() {
           { height: interpolatedHeaderHeight }
         ]}
       >
-        <View style={styles.logoContainer}>
-          <Animated.View 
-            style={[
-              styles.heartIcon,
-              { transform: [{ scale: heartBeat }] }
-            ]}
-          >
-            <Heart size={20} color="#fff" fill="#fff" />
-          </Animated.View>
-          <Text style={styles.title}>MEDICO</Text>
+        <View style={styles.headerTopRow}>
+          <View style={styles.logoContainer}>
+            <Animated.View 
+              style={[
+                styles.heartIcon,
+                { transform: [{ scale: heartBeat }] }
+              ]}
+            >
+              <Heart size={20} color="#fff" fill="#fff" />
+            </Animated.View>
+            <Text style={styles.title}>MEDICO</Text>
+          </View>
         </View>
         
         <Animated.View 
@@ -816,6 +818,13 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 50 : 30,
     paddingHorizontal: 16,
     zIndex: 2,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingBottom: 12,
   },
   logoContainer: {
     flexDirection: 'row',
