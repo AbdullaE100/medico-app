@@ -36,6 +36,9 @@ export interface Comment {
   replies_count?: number;
   has_liked?: boolean;
   has_reposted?: boolean;
+  replies?: Comment[];
+  vote_score?: number;
+  user_vote?: boolean | null;
   author?: {
     full_name: string;
     avatar_url: string;

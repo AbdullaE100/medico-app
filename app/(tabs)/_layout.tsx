@@ -210,6 +210,17 @@ export default function TabLayout() {
             // Keep it accessible through the profile icon header
           }}
         />
+        
+        {/* Hidden Discussions tab - Keep functionality but don't display in UI */}
+        <Tabs.Screen
+          name="discussions"
+          options={{
+            title: 'Discussions',
+            tabBarIcon: ({ color, size }) => <MessagesSquare size={size} color={color} />,
+            // Hide discussions tab completely
+            tabBarItemStyle: { display: 'none' },
+          }}
+        />
       </Tabs>
     </>
   );

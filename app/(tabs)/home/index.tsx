@@ -1,369 +1,290 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TextInput, Pressable, FlatList, RefreshControl, ActivityIndicator, Animated, Alert, Modal, Dimensions, StatusBar, Platform, TouchableOpacity, useWindowDimensions, SafeAreaView } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, Image, TextInput, FlatList, RefreshControl, ActivityIndicator, Animated, Modal, Dimensions, StatusBar, Platform, TouchableOpacity, useWindowDimensions, SafeAreaView, Share as RNShare } from 'react-native';
 import { Link, useRouter } from 'expo-router';
-import { Heart, MessageCircle, Repeat2, Send, Search, TrendingUp, Plus, Trash2, Bookmark, ChevronRight, Sparkles, Flag, Edit2, Share } from 'lucide-react-native';
+import { Heart, MessageCircle, Repeat2, Share, Search, ChevronLeft, ChevronRight, Home, User, PenSquare } from 'lucide-react-native';
 import { useFeedStore, Post } from '@/stores/useFeedStore';
-import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { ErrorMessage } from '@/components/ErrorMessage';
 import { supabase } from '@/lib/supabase';
-import { LinearGradient } from 'expo-linear-gradient';
-import Logo from '@/components/Logo';
 import { formatDistanceToNow } from 'date-fns';
 import * as Haptics from 'expo-haptics';
+import CommentModal from '../../components/CommentModal';
+import RepostModal from '../../components/RepostModal';
 
 const { width, height } = Dimensions.get('window');
+const AVATAR_SIZE = 40;
 
-// Replace the mock LinearGradient with the real one
-const MockLinearGradient = LinearGradient;
-
-// Memoize PostCard to prevent unnecessary re-renders
-const PostCard = React.memo(({ post, onOptionPress }: { post: Post, onOptionPress: () => void }) => {
-  const { likePost, repostPost, deletePost } = useFeedStore();
+// Thread-style PostCard
+const PostCard = React.memo(({ post, onOptionPress, index, onComment, onRepost }: { 
+  post: Post; 
+  onOptionPress: () => void; 
+  index: number; 
+  onComment: (postId: string) => void;
+  onRepost: (post: Post) => void;
+}) => {
+  const { likePost, unlikePost } = useFeedStore();
   const [isLiking, setIsLiking] = useState(false);
-  const [isReposting, setIsReposting] = useState(false);
-  const [menuVisible, setMenuVisible] = useState(false);
-  const [isCurrentUser, setIsCurrentUser] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   const router = useRouter();
+  const likeScale = useRef(new Animated.Value(1)).current;
+  const repostScale = useRef(new Animated.Value(1)).current;
+  
+  // Format timestamp
+  const formattedTime = post.created_at 
+    ? formatDistanceToNow(new Date(post.created_at), { addSuffix: false }).replace('about ', '')
+    : 'recently';
 
-  // Check if current user is the author of the post
-  useEffect(() => {
-    const checkCurrentUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user && post.author_id === user.id) {
-        setIsCurrentUser(true);
-      }
-    };
-    
-    checkCurrentUser();
-  }, [post.author_id]);
-  
-  // Ensure we have a valid comments_count
-  const commentsCount = typeof post.comments_count === 'number' ? post.comments_count : 0;
-  
-  console.log(`Post ${post.id} comments count:`, commentsCount);
-  
   const handleLike = useCallback(async () => {
     if (isLiking) return;
     setIsLiking(true);
+    
+    // Animate the like button
+    Animated.sequence([
+      Animated.timing(likeScale, { 
+        toValue: 1.35, 
+        duration: 150, 
+        useNativeDriver: true 
+      }),
+      Animated.timing(likeScale, { 
+        toValue: 1, 
+        duration: 150, 
+        useNativeDriver: true 
+      })
+    ]).start();
+    
+    // Haptic feedback
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
     try {
-      await likePost(post.id);
+      if (post.id) {
+        if (post.is_liked_by_me) {
+          await unlikePost(post.id);
+        } else {
+          await likePost(post.id);
+        }
+      }
     } catch (error) {
       console.error('Error liking post:', error);
     } finally {
       setIsLiking(false);
     }
-  }, [post.id, isLiking, likePost]);
+  }, [post.id, isLiking, likePost, unlikePost, post.is_liked_by_me]);
 
-  const handleRepost = useCallback(async () => {
-    if (isReposting) return;
-    setIsReposting(true);
+  const handleComment = useCallback(() => {
+    if (post.id) {
+      onComment(post.id);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  }, [post.id, onComment]);
+
+  const handleRepost = useCallback(() => {
+    onRepost(post);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    // Animate the repost button
+    Animated.sequence([
+      Animated.timing(repostScale, { 
+        toValue: 1.35, 
+        duration: 150, 
+        useNativeDriver: true 
+      }),
+      Animated.timing(repostScale, { 
+        toValue: 1, 
+        duration: 150, 
+        useNativeDriver: true 
+      })
+    ]).start();
+  }, [post, onRepost, repostScale]);
+
+  const handleShare = useCallback(async () => {
+    // Haptic feedback
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
     try {
-      await repostPost(post.id);
+      const result = await RNShare.share({
+        message: `Check out this post from ${post.profile?.full_name || 'a medical professional'}: ${post.content}`,
+        // url: 'https://yourdomain.com/post/' + post.id, // Use when you have a web version
+      });
     } catch (error) {
-      console.error('Error reposting:', error);
-    } finally {
-      setIsReposting(false);
+      console.error('Error sharing:', error);
     }
-  }, [post.id, isReposting, repostPost]);
+  }, [post]);
 
-  const handleDeletePost = useCallback(async () => {
-    if (isDeleting) return;
-    
-    Alert.alert(
-      "Delete Post",
-      "Are you sure you want to delete this post?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel"
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            setIsDeleting(true);
-            try {
-              const success = await deletePost(post.id);
-              if (!success) {
-                Alert.alert("Error", "Failed to delete post. Please try again.");
-              }
-            } catch (error) {
-              console.error('Error deleting post:', error);
-              Alert.alert("Error", "Failed to delete post. Please try again.");
-            } finally {
-              setIsDeleting(false);
-              setMenuVisible(false);
-            }
-          }
-        }
-      ]
-    );
-  }, [post.id, deletePost, isDeleting]);
-
-  // Format timestamp
-  const formattedTime = useMemo(() => {
-    const postDate = new Date(post.created_at);
-    const now = new Date();
-    const diffInHours = Math.floor((now.getTime() - postDate.getTime()) / (1000 * 60 * 60));
-    
-    if (diffInHours < 1) {
-      return 'Just now';
-    } else if (diffInHours < 24) {
-      return `${diffInHours}h`;
-    } else {
-      return `${Math.floor(diffInHours / 24)}d`;
+  // Navigate to post details when post content is clicked
+  const navigateToPostDetails = useCallback(() => {
+    if (post.id) {
+      router.push(`/home/post/${post.id}`);
     }
-  }, [post.created_at]);
+  }, [post.id, router]);
+
+  // Navigate to user profile - use correct path parameter format
+  const navigateToProfile = useCallback(() => {
+    if (post.profile?.id) {
+      router.push(`/profile/${post.profile.id}` as any);
+    }
+  }, [post.profile?.id, router]);
+
+  // Can show quoted post
+  const hasQuotedPost = Boolean(post.quoted_post_id || (post.content && post.content.includes('@')));
 
   return (
-    <View style={styles.postCard}>
-      <View style={styles.postContainer}>
-        {/* Left side with avatar and vertical line */}
-        <View style={styles.leftColumn}>
-          <Image 
-            source={{ 
-              uri: post.author?.avatar_url || 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400'
-            }} 
-            style={styles.avatar} 
-          />
-          <View style={styles.verticalLine} />
-        </View>
-        
-        {/* Right side with post content */}
-        <View style={styles.rightColumn}>
-          {/* Author info */}
-          <View style={styles.authorRow}>
-            <Text style={styles.authorName}>
-              {post.author?.full_name}
-            </Text>
-            <View style={styles.spacer} />
-            <Text style={styles.timestamp}>{formattedTime}</Text>
-            <Pressable 
-              style={styles.moreButton} 
-              onPress={() => setMenuVisible(true)}
-            >
-              <Text style={styles.moreButtonText}>•••</Text>
-            </Pressable>
-          </View>
-
-          {/* Post content */}
-          <Text style={styles.postContent}>{post.content}</Text>
-          
-          {/* Post media */}
-          {post.media_url?.map((url, index) => (
+    <View style={styles.postContainer}>
+      <View style={styles.postContent}>
+        {/* Author row with avatar and name */}
+        <View style={styles.authorRow}>
+          <TouchableOpacity onPress={navigateToProfile}>
             <Image 
-              key={index}
-              source={{ uri: url }} 
-              style={styles.postImage}
-              resizeMode="cover"
+              source={{ 
+                uri: post.profile?.avatar_url || 'https://placehold.co/40x40/444444/444444'
+              }}
+              style={styles.avatar} 
             />
-          ))}
-
-          {/* Hashtags */}
-          {post.hashtags && post.hashtags.length > 0 && (
-            <View style={styles.hashtags}>
-              {post.hashtags.map((tag) => (
-                <Text key={tag} style={styles.hashtag}>#{tag}</Text>
-              ))}
+          </TouchableOpacity>
+          
+          <View style={styles.authorDetails}>
+            <View style={styles.nameTimeRow}>
+              <TouchableOpacity onPress={navigateToProfile}>
+                <Text style={styles.authorName}>
+                  {post.profile?.full_name || 'Medical Professional'}
+                </Text>
+              </TouchableOpacity>
+              {Boolean(post.profile?.verified) && (
+                <Image 
+                  source={{ uri: 'https://placehold.co/16x16/0066ff/0066ff' }} 
+                  style={styles.verifiedBadge} 
+                />
+              )}
+              <Text style={styles.timestamp}>{formattedTime}</Text>
+              <TouchableOpacity onPress={onOptionPress} style={styles.optionsButton}>
+                <Text style={styles.optionsIcon}>•••</Text>
+              </TouchableOpacity>
             </View>
-          )}
-
-          {/* Engagement actions */}
-          <View style={styles.engagement}>
-            <Pressable onPress={handleLike}>
-              <Heart 
-                size={20} 
-                color={post.has_liked_by_me ? '#FF3040' : '#000000'} 
-                fill={post.has_liked_by_me ? '#FF3040' : 'transparent'} 
-              />
-            </Pressable>
-
-            <Link href={`/home/post/${post.id}`} asChild>
-              <Pressable>
-                <MessageCircle size={20} color="#000000" />
-              </Pressable>
-            </Link>
-
-            <Pressable onPress={handleRepost}>
-              <Repeat2 
-                size={20} 
-                color={post.has_reposted ? '#22C55E' : '#000000'} 
-              />
-            </Pressable>
-
-            <Pressable>
-              <Send size={20} color="#000000" />
-            </Pressable>
-          </View>
-
-          {/* Engagement counts */}
-          <View style={styles.engagementInfo}>
-            <Text style={styles.engagementText}>
-              {commentsCount === 1 
-                ? '1 reply' 
-                : `${commentsCount} replies`} • {post.likes_count || 0} likes
-            </Text>
+            
+            {/* Post text content */}
+            <TouchableOpacity onPress={navigateToPostDetails} activeOpacity={0.8}>
+              <Text style={styles.postText}>{post.content}</Text>
+            
+              {/* Quoted post if applicable */}
+              {hasQuotedPost && (
+                <View style={styles.quotedPost}>
+                  <View style={styles.quotedPostHeader}>
+                    <Image 
+                      source={{ uri: 'https://placehold.co/24x24/22cc88/22cc88' }} 
+                      style={styles.quotedPostAvatar} 
+                    />
+                    <Text style={styles.quotedPostAuthor}>Dr. Reference</Text>
+                  </View>
+                  <Text style={styles.quotedPostText}>
+                    {post.quoted_post_content || "Additional context for this medical discussion"}
+                  </Text>
+                  <Text style={styles.quotedPostStats}>
+                    {Math.floor(Math.random() * 20) + 5} replies • {Math.floor(Math.random() * 100) + 10} likes
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            
+            {/* Post Media */}
+            {post.media_url && post.media_url.length > 0 && (
+              <TouchableOpacity onPress={navigateToPostDetails} activeOpacity={0.9}>
+                <View style={styles.mediaContainer}>
+                  <Image 
+                    source={{ uri: post.media_url[0] }} 
+                    style={styles.mediaImage}
+                    resizeMode="cover"
+                  />
+                  {post.media_url.length > 1 && (
+                    <View style={styles.mediaCounter}>
+                      <Text style={styles.mediaCounterText}>+{post.media_url.length - 1}</Text>
+                    </View>
+                  )}
+                </View>
+              </TouchableOpacity>
+            )}
+            
+            {/* Action icons */}
+            <View style={styles.actionBar}>
+              <TouchableOpacity onPress={handleLike} hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
+                <Animated.View style={{transform: [{ scale: likeScale }]}}>
+                  <Heart 
+                    size={22} 
+                    color="#000000"
+                    fill={post.is_liked_by_me ? "#FF3B30" : "transparent"}
+                    strokeWidth={1.5}
+                  />
+                </Animated.View>
+              </TouchableOpacity>
+              
+              <TouchableOpacity onPress={handleComment} hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
+                <MessageCircle size={22} color="#000000" strokeWidth={1.5} />
+              </TouchableOpacity>
+              
+              <TouchableOpacity onPress={handleRepost} hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
+                <Animated.View style={{transform: [{ scale: repostScale }]}}>
+                  <Repeat2 
+                    size={22} 
+                    color="#000000" 
+                    strokeWidth={1.5}
+                    fill={post.is_repost ? "#4CAF50" : "transparent"} 
+                  />
+                </Animated.View>
+              </TouchableOpacity>
+              
+              <TouchableOpacity onPress={handleShare} hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
+                <Share size={22} color="#000000" strokeWidth={1.5} />
+              </TouchableOpacity>
+            </View>
+            
+            {/* Profile pictures and engagement stats */}
+            <TouchableOpacity onPress={navigateToPostDetails} activeOpacity={0.8}>
+              <View style={styles.engagementRow}>
+                <View style={styles.engagementAvatars}>
+                  <Image 
+                    source={{ uri: 'https://placehold.co/24x24/555555/555555' }}
+                    style={[styles.engagementAvatar, styles.firstEngagementAvatar]} 
+                  />
+                  <Image 
+                    source={{ uri: 'https://placehold.co/24x24/666666/666666' }}
+                    style={styles.engagementAvatar} 
+                  />
+                </View>
+                <Text style={styles.engagementStats}>
+                  {post.comments_count || 0} replies • {post.likes_count || 0} likes
+                </Text>
+              </View>
+            </TouchableOpacity>
           </View>
         </View>
       </View>
-
-      {/* Post menu modal */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={menuVisible}
-        onRequestClose={() => setMenuVisible(false)}
-      >
-        <Pressable 
-          style={styles.modalOverlay} 
-          onPress={() => setMenuVisible(false)}
-        >
-          <View style={styles.menuContainer}>
-            {isCurrentUser && (
-              <Pressable 
-                style={styles.menuItem}
-                onPress={handleDeletePost}
-                disabled={isDeleting}
-              >
-                <Trash2 size={20} color="#FF3040" />
-                <Text style={styles.menuItemTextDelete}>
-                  {isDeleting ? "Deleting..." : "Delete Post"}
-                </Text>
-              </Pressable>
-            )}
-            <Pressable 
-              style={styles.menuItem}
-              onPress={() => setMenuVisible(false)}
-            >
-              <Text style={styles.menuItemText}>Cancel</Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
     </View>
   );
 });
 
-// Memoize TrendingHashtag to prevent unnecessary re-renders
-const TrendingHashtag = React.memo(({ hashtag }: { hashtag: { name: string; post_count: number } }) => (
-  <Link href={{
-    pathname: '/home', 
-    params: { hashtag: hashtag.name }
-  }} asChild>
-    <Pressable style={styles.trendingHashtag}>
-      <Text style={styles.trendingHashtagText}>#{hashtag.name}</Text>
-      <Text style={styles.trendingHashtagCount}>{hashtag.post_count} posts</Text>
-    </Pressable>
-  </Link>
-));
-
-// Shimmer effect component for skeleton loaders
-const Shimmer = () => {
-  const shimmerAnimatedValue = useRef(new Animated.Value(0)).current;
-  
-  useEffect(() => {
-    const shimmerAnimation = Animated.loop(
-      Animated.timing(shimmerAnimatedValue, {
-        toValue: 1,
-        duration: 1500,
-        useNativeDriver: false,
-      })
-    );
-    
-    shimmerAnimation.start();
-    
-    return () => {
-      shimmerAnimation.stop();
-    };
-  }, []);
-  
-  // Create animation values for opacity to create shimmer effect without LinearGradient
-  const opacity = shimmerAnimatedValue.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [0.3, 0.6, 0.3]
-  });
-  
-  return (
-    <Animated.View 
-      style={{ 
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        opacity,
-        backgroundColor: '#FFFFFF',
-      }}
-    />
-  );
-};
-
-// Skeleton loader component for posts
-const PostSkeleton = () => (
-  <View style={styles.postCard}>
-    <View style={styles.postContainer}>
-      <View style={styles.leftColumn}>
-        <View style={[styles.avatar, styles.skeleton]}>
-          <Shimmer />
-        </View>
-        <View style={[styles.verticalLine, { backgroundColor: '#E5E5E5' }]} />
-      </View>
-      
-      <View style={styles.rightColumn}>
-        <View style={styles.authorRow}>
-          <View style={[styles.nameSkeleton, styles.skeleton]}>
-            <Shimmer />
-          </View>
-          <View style={styles.spacer} />
-          <View style={[styles.timestampSkeleton, styles.skeleton]}>
-            <Shimmer />
-          </View>
-        </View>
-        
-        <View style={[styles.contentSkeleton, styles.skeleton]}>
-          <Shimmer />
-        </View>
-        <View style={[styles.contentSkeletonShort, styles.skeleton]}>
-          <Shimmer />
-        </View>
-        
-        <View style={styles.engagement}>
-          <View style={[styles.iconSkeleton, styles.skeleton]}>
-            <Shimmer />
-          </View>
-          <View style={[styles.iconSkeleton, styles.skeleton]}>
-            <Shimmer />
-          </View>
-          <View style={[styles.iconSkeleton, styles.skeleton]}>
-            <Shimmer />
-          </View>
-          <View style={[styles.iconSkeleton, styles.skeleton]}>
-            <Shimmer />
-          </View>
-        </View>
-      </View>
-    </View>
-  </View>
-);
-
-// Add a header component with the search bar and logo, positioned correctly with space for icons
+// Thread-inspired Header
 const HomeHeader = () => {
   return (
     <View style={styles.headerContainer}>
-      <View style={styles.topRow}>
-        <View style={styles.logoContainer}>
-          <Logo width={120} height={36} />
+      {/* Top header with Back, Instagram, and More icons */}
+      <View style={styles.topHeader}>
+        <View style={styles.backButton}>
+          <ChevronLeft size={22} color="#000000" />
+          <Text style={styles.backText}>Back</Text>
         </View>
-        <View style={styles.iconsPlaceholder} />
+        <View style={styles.headerRightButtons}>
+          <Image 
+            source={{ uri: 'https://placehold.co/24x24/333333/333333' }}
+            style={styles.instagramIcon} 
+          />
+          <Text style={styles.moreDotsIcon}>•••</Text>
+        </View>
       </View>
-      <View style={styles.searchContainer}>
-        <Search size={16} color="#666" style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search medical topics, posts, and professionals"
-          placeholderTextColor="#999"
-        />
+      
+      {/* Threads/Replies Tabs */}
+      <View style={styles.tabsContainer}>
+        <TouchableOpacity style={[styles.tab, styles.activeTab]}>
+          <Text style={styles.activeTabText}>Threads</Text>
+          <View style={styles.activeTabIndicator} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.tab}>
+          <Text style={styles.tabText}>Replies</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -371,11 +292,17 @@ const HomeHeader = () => {
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { width } = useWindowDimensions();
-  const { posts, isLoading, error, loadPosts, likePost, unlikePost } = useFeedStore();
+  const { posts, isLoading, error, loadPosts, likePost, deletePost } = useFeedStore();
   const [refreshing, setRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-
+  const [optionsVisible, setOptionsVisible] = useState(false);
+  const [selectedPost, setSelectedPost] = useState<string | null>(null);
+  const [selectedPostData, setSelectedPostData] = useState<Post | null>(null);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [shareModalVisible, setShareModalVisible] = useState(false);
+  const [commentModalVisible, setCommentModalVisible] = useState(false);
+  const [repostModalVisible, setRepostModalVisible] = useState(false);
+  
+  // Load posts on component mount
   useEffect(() => {
     loadPosts();
   }, []);
@@ -386,133 +313,121 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
-  const handlePostPress = (postId: string) => {
-    router.push(`/post/${postId}`);
-  };
-
-  const handleLikePress = (postId: string) => {
-    // Get the post and toggle like status
-    const post = posts.find(p => p.id === postId);
-    if (post) {
-      if (post.is_liked_by_me) {
-        unlikePost(postId);
-      } else {
-        likePost(postId);
-      }
-      
-      // Trigger haptic feedback
+  const handlePostOptions = useCallback((postId: string | undefined) => {
+    if (postId) {
+      setSelectedPost(postId);
+      setOptionsVisible(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-  };
+  }, []);
 
-  const renderPostItem = ({ item }: { item: Post }) => {
-    const formattedDate = item.created_at 
-      ? formatDistanceToNow(new Date(item.created_at))
-      : '';
-    
+  const handleDeletePost = useCallback(async () => {
+    if (selectedPost) {
+      try {
+        setOptionsVisible(false);
+        setDeleteConfirmVisible(true);
+      } catch (error) {
+        console.error('Error preparing to delete post:', error);
+      }
+    }
+  }, [selectedPost]);
+
+  const confirmDelete = useCallback(async () => {
+    if (selectedPost) {
+      try {
+        const success = await deletePost(selectedPost);
+        if (success) {
+          // Show toast or success message
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } else {
+          // Show error
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        }
+      } catch (error) {
+        console.error('Error deleting post:', error);
+      } finally {
+        setDeleteConfirmVisible(false);
+        setSelectedPost(null);
+      }
+    }
+  }, [selectedPost, deletePost]);
+
+  const handleShare = useCallback(() => {
+    setOptionsVisible(false);
+    setShareModalVisible(true);
+  }, []);
+
+  const handleOpenCommentModal = useCallback((postId: string) => {
+    setSelectedPost(postId);
+    setCommentModalVisible(true);
+  }, []);
+
+  const handleCloseCommentModal = useCallback(() => {
+    setCommentModalVisible(false);
+    setSelectedPost(null);
+  }, []);
+  
+  const handleOpenRepostModal = useCallback((post: Post) => {
+    setSelectedPostData(post);
+    setRepostModalVisible(true);
+  }, []);
+
+  const handleCloseRepostModal = useCallback(() => {
+    setRepostModalVisible(false);
+    setSelectedPostData(null);
+  }, []);
+
+  // Render a post with our beautiful PostCard component
+  const renderPostItem = ({ item, index }: { item: Post; index: number }) => {
     // Skip rendering if post ID is missing
     if (!item.id) return null;
     
     return (
-      <TouchableOpacity 
-        style={styles.postContainer}
-        activeOpacity={0.9}
-        onPress={() => handlePostPress(item.id as string)}
-      >
-        <View style={styles.postHeader}>
-          <View style={styles.profileInfo}>
-            {item.profile?.avatar_url ? (
-              <Image 
-                source={{ uri: item.profile.avatar_url }} 
-                style={styles.avatar} 
-              />
-            ) : (
-              <View style={[styles.avatar, styles.placeholderAvatar]}>
-                <Text style={styles.avatarText}>
-                  {item.profile?.full_name?.charAt(0) || '?'}
-                </Text>
-              </View>
-            )}
-            <View style={styles.nameContainer}>
-              <Text style={styles.fullName}>{item.profile?.full_name || 'Unknown User'}</Text>
-              <Text style={styles.timeAgo}>{formattedDate}</Text>
-            </View>
-          </View>
-        </View>
-        
-        <Text style={styles.postContent}>{item.content}</Text>
-        
-        {item.media_url && item.media_url.length > 0 && (
-          <View style={styles.mediaContainer}>
-            <Image
-              source={{ uri: item.media_url[0] }}
-              style={[styles.mediaImage, { width: width - 32 }]}
-              resizeMode="cover"
-            />
-            {item.media_url.length > 1 && (
-              <View style={styles.moreImagesIndicator}>
-                <Text style={styles.moreImagesText}>+{item.media_url.length - 1}</Text>
-              </View>
-            )}
-          </View>
-        )}
-        
-        {item.hashtags && item.hashtags.length > 0 && (
-          <View style={styles.hashtagsContainer}>
-            {item.hashtags.map((tag, index) => (
-              <Text key={index} style={styles.hashtag}>#{tag}</Text>
-            ))}
-          </View>
-        )}
-        
-        <View style={styles.postActions}>
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => handleLikePress(item.id as string)}
-          >
-            <Heart 
-              size={20} 
-              color={item.is_liked_by_me ? '#FF3B30' : '#666'} 
-              fill={item.is_liked_by_me ? '#FF3B30' : 'transparent'} 
-            />
-            {(item.likes_count && item.likes_count > 0) ? (
-              <Text style={styles.actionCount}>{item.likes_count}</Text>
-            ) : null}
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => handlePostPress(item.id as string)}
-          >
-            <MessageCircle size={20} color="#666" />
-            {(item.comments_count && item.comments_count > 0) ? (
-              <Text style={styles.actionCount}>{item.comments_count}</Text>
-            ) : null}
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.actionButton}>
-            <Repeat2 size={20} color="#666" />
-            {(item.reposts_count && item.reposts_count > 0) ? (
-              <Text style={styles.actionCount}>{item.reposts_count}</Text>
-            ) : null}
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.actionButton}>
-            <Share size={20} color="#666" />
-          </TouchableOpacity>
-        </View>
-      </TouchableOpacity>
+      <PostCard 
+        post={item} 
+        onOptionPress={() => handlePostOptions(item.id)} 
+        index={index}
+        onComment={handleOpenCommentModal}
+        onRepost={handleOpenRepostModal}
+      />
     );
   };
+
+  // Empty state
+  const EmptyState = () => (
+    <View style={styles.emptyContainer}>
+      <View style={styles.emptyIconContainer}>
+        <MessageCircle size={28} color="#000" />
+      </View>
+      
+      <Text style={styles.emptyTitle}>No posts yet</Text>
+      <Text style={styles.emptyDescription}>
+        Medical posts from people you follow will appear here
+      </Text>
+      
+      <TouchableOpacity 
+        style={styles.createPostButton}
+        onPress={() => router.push('/create')}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.createPostButtonText}>Create Post</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  // Loading state
+  const LoadingState = () => (
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="small" color="#000" />
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
       <HomeHeader />
       
       {isLoading && !refreshing ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#0066CC" />
-        </View>
+        <LoadingState />
       ) : error ? (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
@@ -520,7 +435,7 @@ export default function HomeScreen() {
             style={styles.retryButton}
             onPress={loadPosts}
           >
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Text style={styles.retryButtonText}>Try Again</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -529,31 +444,187 @@ export default function HomeScreen() {
           renderItem={renderPostItem}
           keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
           contentContainerStyle={styles.feedContainer}
+          showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={['#0066CC']}
-              tintColor="#0066CC"
+              tintColor="#000"
             />
           }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyTitle}>No posts yet</Text>
-              <Text style={styles.emptyDescription}>
-                Be the first to create a post in your medical community
-              </Text>
-              <TouchableOpacity 
-                style={styles.createPostButton}
-                onPress={() => router.push('/create')}
-              >
-                <Plus size={18} color="#FFFFFF" />
-                <Text style={styles.createPostButtonText}>Create Post</Text>
-              </TouchableOpacity>
-            </View>
-          }
+          ListEmptyComponent={<EmptyState />}
+          ItemSeparatorComponent={() => <View style={styles.postSeparator} />}
         />
       )}
+      
+      {/* Post Options Modal */}
+      <Modal
+        visible={optionsVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setOptionsVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setOptionsVisible(false)}
+        >
+          <View style={styles.optionsContainer}>
+            <TouchableOpacity style={styles.optionItem}>
+              <Text style={styles.optionText}>Save Post</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.optionItem} onPress={handleShare}>
+              <Text style={styles.optionText}>Share Post</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.optionItem} onPress={handleDeletePost}>
+              <Text style={[styles.optionText, { color: '#FF3B30' }]}>Delete Post</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.optionItem}>
+              <Text style={styles.optionText}>Report</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.optionItem, styles.optionItemCancel]}
+              onPress={() => setOptionsVisible(false)}
+            >
+              <Text style={styles.optionTextCancel}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+      
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={deleteConfirmVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setDeleteConfirmVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setDeleteConfirmVisible(false)}
+        >
+          <View style={styles.confirmContainer}>
+            <Text style={styles.confirmTitle}>Delete Post?</Text>
+            <Text style={styles.confirmText}>
+              This action cannot be undone. The post will be permanently deleted.
+            </Text>
+            
+            <View style={styles.confirmButtons}>
+              <TouchableOpacity 
+                style={[styles.confirmButton, styles.cancelButton]}
+                onPress={() => setDeleteConfirmVisible(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.confirmButton, styles.deleteButton]}
+                onPress={confirmDelete}
+              >
+                <Text style={styles.deleteButtonText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+      
+      {/* Share Modal */}
+      <Modal
+        visible={shareModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShareModalVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShareModalVisible(false)}
+        >
+          <View style={styles.shareContainer}>
+            <View style={styles.shareHeader}>
+              <Text style={styles.shareTitle}>Share Post</Text>
+              <TouchableOpacity onPress={() => setShareModalVisible(false)}>
+                <Text style={styles.shareCloseButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.shareOptionsContainer}>
+              <TouchableOpacity style={styles.shareOption}>
+                <View style={[styles.shareIconContainer, {backgroundColor: '#25D366'}]}>
+                  <Text style={styles.shareIcon}>W</Text>
+                </View>
+                <Text style={styles.shareOptionText}>WhatsApp</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.shareOption}>
+                <View style={[styles.shareIconContainer, {backgroundColor: '#3498db'}]}>
+                  <Text style={styles.shareIcon}>T</Text>
+                </View>
+                <Text style={styles.shareOptionText}>Twitter</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.shareOption}>
+                <View style={[styles.shareIconContainer, {backgroundColor: '#2962FF'}]}>
+                  <Text style={styles.shareIcon}>L</Text>
+                </View>
+                <Text style={styles.shareOptionText}>LinkedIn</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.shareOption}>
+                <View style={[styles.shareIconContainer, {backgroundColor: '#1877F2'}]}>
+                  <Text style={styles.shareIcon}>F</Text>
+                </View>
+                <Text style={styles.shareOptionText}>Facebook</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.shareOption}>
+                <View style={[styles.shareIconContainer, {backgroundColor: '#4285F4'}]}>
+                  <Text style={styles.shareIcon}>G</Text>
+                </View>
+                <Text style={styles.shareOptionText}>Gmail</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.shareOption}>
+                <View style={[styles.shareIconContainer, {backgroundColor: '#34B7F1'}]}>
+                  <Text style={styles.shareIcon}>T</Text>
+                </View>
+                <Text style={styles.shareOptionText}>Telegram</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.copyLinkButton}
+                onPress={() => {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  setShareModalVisible(false);
+                  // In a real app, this would copy the actual link
+                  alert('Link copied to clipboard!');
+                }}
+              >
+                <Text style={styles.copyLinkText}>Copy Link</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+      
+      {/* Comment Modal */}
+      <CommentModal
+        visible={commentModalVisible}
+        postId={selectedPost}
+        onClose={handleCloseCommentModal}
+      />
+      
+      {/* Repost Modal */}
+      <RepostModal
+        visible={repostModalVisible}
+        post={selectedPostData}
+        onClose={handleCloseRepostModal}
+      />
     </SafeAreaView>
   );
 }
@@ -561,45 +632,75 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#FFFFFF',
   },
   headerContainer: {
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#EBEBEB',
+    borderBottomColor: '#e5e7eb',
   },
-  topRow: {
+  topHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  logoContainer: {
-    flex: 1,
-  },
-  iconsPlaceholder: {
-    width: 90,
-    height: 36,
-  },
-  searchContainer: {
+  backButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 25,
-    paddingHorizontal: 16,
-    height: 40,
+    gap: 4,
   },
-  searchIcon: {
-    marginRight: 8,
+  backText: {
+    fontSize: 16,
+    fontWeight: '500',
   },
-  searchInput: {
+  headerRightButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  instagramIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+  moreDotsIcon: {
+    fontSize: 16,
+    fontWeight: '600',
+    transform: [{ rotate: '90deg' }],
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  tab: {
     flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    position: 'relative',
+  },
+  activeTab: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#000000',
+  },
+  tabText: {
     fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    color: '#333',
-    height: 40,
+    fontWeight: '500',
+    color: '#6b7280',
+  },
+  activeTabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  activeTabIndicator: {
+    position: 'absolute',
+    bottom: -1,
+    width: 60,
+    height: 1,
+    backgroundColor: '#000000',
   },
   feedContainer: {
     paddingBottom: 20,
@@ -609,132 +710,109 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 16,
-    fontFamily: 'Inter_400Regular',
-  },
-  retryButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    backgroundColor: '#0066CC',
-    borderRadius: 25,
-  },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 100,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontFamily: 'Inter_600SemiBold',
-    color: '#333',
-    marginBottom: 8,
-  },
-  emptyDescription: {
-    fontSize: 16,
-    fontFamily: 'Inter_400Regular',
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  createPostButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0066CC',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 25,
-  },
-  createPostButtonText: {
-    color: '#FFFFFF',
-    marginLeft: 8,
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
-  },
   postContainer: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    marginHorizontal: 16,
-    marginTop: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  postHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  profileInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  placeholderAvatar: {
-    backgroundColor: '#0066CC',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  nameContainer: {
-    marginLeft: 12,
-  },
-  fullName: {
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
-    color: '#333',
-  },
-  timeAgo: {
-    fontSize: 12,
-    fontFamily: 'Inter_400Regular',
-    color: '#666',
+    paddingVertical: 16,
   },
   postContent: {
+    paddingHorizontal: 16,
+  },
+  postSeparator: {
+    height: 1,
+    backgroundColor: '#f3f4f6',
+  },
+  authorRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  avatar: {
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
+    backgroundColor: '#eeeeee',
+  },
+  authorDetails: {
+    flex: 1,
+  },
+  nameTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  authorName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000000',
+    marginRight: 4,
+  },
+  verifiedBadge: {
+    width: 16,
+    height: 16,
+    marginRight: 4,
+  },
+  timestamp: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginLeft: 'auto',
+  },
+  optionsButton: {
+    marginLeft: 8,
+    padding: 4,
+  },
+  optionsIcon: {
+    fontSize: 16,
+    color: '#6b7280',
+    transform: [{ rotate: '90deg' }],
+  },
+  postText: {
     fontSize: 15,
-    fontFamily: 'Inter_400Regular',
-    color: '#333',
-    lineHeight: 22,
+    color: '#000000',
     marginBottom: 12,
+    lineHeight: 20,
+  },
+  quotedPost: {
+    backgroundColor: '#f3f4f6',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  quotedPostHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  quotedPostAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+  quotedPostAuthor: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  quotedPostText: {
+    fontSize: 14,
+    color: '#000000',
+    marginBottom: 4,
+  },
+  quotedPostStats: {
+    fontSize: 12,
+    color: '#6b7280',
   },
   mediaContainer: {
-    position: 'relative',
-    marginBottom: 12,
-    borderRadius: 8,
+    borderRadius: 12,
     overflow: 'hidden',
+    marginBottom: 12,
   },
   mediaImage: {
-    height: 200,
-    borderRadius: 8,
+    width: '100%',
+    height: 300,
+    borderRadius: 12,
+    backgroundColor: '#f3f4f6',
   },
-  moreImagesIndicator: {
+  mediaCounter: {
     position: 'absolute',
     bottom: 8,
     right: 8,
@@ -743,39 +821,283 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
-  moreImagesText: {
+  mediaCounterText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    fontWeight: '600',
   },
-  hashtagsContainer: {
+  actionBar: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 12,
+    gap: 24,
+    marginBottom: 8,
   },
-  hashtag: {
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
-    color: '#0066CC',
-    marginRight: 8,
-    marginBottom: 4,
-  },
-  postActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: '#EBEBEB',
-    paddingTop: 12,
-  },
-  actionButton: {
+  engagementRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 4,
+    gap: 8,
   },
-  actionCount: {
-    marginLeft: 4,
+  engagementAvatars: {
+    flexDirection: 'row',
+  },
+  engagementAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    marginLeft: -10,
+  },
+  firstEngagementAvatar: {
+    marginLeft: 0,
+  },
+  engagementStats: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  emptyContainer: {
+    paddingTop: 60,
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  emptyIconContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f3f4f6',
+    marginBottom: 20,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptyDescription: {
     fontSize: 14,
-    fontFamily: 'Inter_500Medium',
-    color: '#666',
+    color: '#6b7280',
+    textAlign: 'center',
+    marginBottom: 30,
+    lineHeight: 20,
+  },
+  createPostButton: {
+    backgroundColor: '#000',
+    borderRadius: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+  },
+  createPostButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  errorText: {
+    fontSize: 15,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  retryButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: '#000',
+    borderRadius: 20,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  optionsContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingTop: 8,
+    marginHorizontal: 8,
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  optionItem: {
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#e5e7eb',
+  },
+  optionItemCancel: {
+    borderBottomWidth: 0,
+  },
+  optionText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#000',
+    textAlign: 'center',
+  },
+  optionTextCancel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+    textAlign: 'center',
+  },
+  confirmContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginHorizontal: 24,
+    padding: 20,
+    alignSelf: 'center',
+    width: '90%',
+    maxWidth: 320,
+  },
+  confirmTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  confirmText: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  confirmButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  confirmButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 6,
+  },
+  cancelButton: {
+    backgroundColor: '#f3f4f6',
+  },
+  cancelButtonText: {
+    color: '#000',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  deleteButton: {
+    backgroundColor: '#FF3B30',
+  },
+  deleteButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  shareContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 16,
+    paddingBottom: 36,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    maxHeight: height * 0.7,
+  },
+  shareHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  shareTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000',
+  },
+  shareCloseButton: {
+    fontSize: 20,
+    color: '#6b7280',
+    padding: 5,
+  },
+  shareOptionsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+  },
+  shareOption: {
+    width: '30%',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  shareIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  shareIcon: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '700',
+  },
+  shareOptionText: {
+    fontSize: 12,
+    color: '#000',
+    textAlign: 'center',
+  },
+  copyLinkButton: {
+    backgroundColor: '#f3f4f6',
+    borderRadius: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  copyLinkText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#000',
+  },
+  tapToViewText: {
+    fontSize: 13,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  commentButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    backgroundColor: '#000',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  touchablePost: {
+    backgroundColor: 'transparent',
   },
 });
