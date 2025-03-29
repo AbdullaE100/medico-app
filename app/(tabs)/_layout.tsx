@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Tabs, usePathname } from 'expo-router';
-import { Chrome as Home, Users, MessagesSquare, Bell, User, Plus } from 'lucide-react-native';
+import { Chrome as Home, Users, MessagesSquare, Bell, User, Plus, Newspaper } from 'lucide-react-native';
 import { Platform, View, StyleSheet, ActivityIndicator, SafeAreaView, StatusBar, Text } from 'react-native';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useFeedStore } from '@/stores/useFeedStore';
@@ -32,52 +32,62 @@ export default function TabLayout() {
   // Check if we're on the create page - hide header icons on create page
   const isCreatePage = pathname === '/create' || pathname === '/create/index' || pathname.startsWith('/create/');
   
+  // NEW: Check if we should show header icons (only on main tab screens)
+  const shouldShowHeaderIcons = () => {
+    // Don't show on create page (existing condition)
+    if (isCreatePage) return false;
+    
+    // Only show on main tab screens, not on nested screens
+    const isMainTabScreen = 
+      pathname === '/home' || 
+      pathname === '/home/index' || 
+      pathname === '/network' || 
+      pathname === '/network/index' || 
+      pathname === '/discussions' || 
+      pathname === '/discussions/index';
+    
+    return isMainTabScreen;
+  };
+  
   // Add state to track if initial loading is complete
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Load data in parallel batches to improve performance
   useEffect(() => {
-    console.log("TabLayout: Authentication state changed. isAuthenticated =", isAuthenticated);
-    
-    if (isAuthenticated) {
-      console.log("TabLayout: User is authenticated, loading data...");
-      
-      // First batch - Critical UI data
-      Promise.all([
-        fetchChats().catch(err => console.error("Error fetching chats:", err)),
-        fetchNotifications().catch(err => console.error("Error fetching notifications:", err))
-      ]).catch(err => console.error("Error in first batch:", err));
-
-      // Second batch - Feed and network data
-      setTimeout(() => {
-        Promise.all([
-          fetchPosts().catch(err => console.error("Error fetching posts:", err)),
-          fetchDoctors().catch(err => console.error("Error fetching doctors:", err))
-        ]).catch(err => console.error("Error in second batch:", err));
-      }, 100);
-
-      // Third batch - Additional data
-      setTimeout(() => {
-        Promise.all([
-          fetchTrendingHashtags().catch(err => console.error("Error fetching hashtags:", err)),
-          fetchConnectionRequests().catch(err => console.error("Error fetching connection requests:", err)),
-          fetchDiscussions().catch(err => console.error("Error fetching discussions:", err)),
-          fetchCategories().catch(err => console.error("Error fetching categories:", err))
-        ]).catch(err => console.error("Error in third batch:", err))
-        .finally(() => {
-          // Mark initialization as complete
-          setIsInitialized(true);
-          console.log("TabLayout: All data loaded and initialized");
-        });
-      }, 200);
-    } else {
-      console.log("TabLayout: User is not authenticated yet");
-      // Even if not authenticated, mark as initialized after a timeout
-      setTimeout(() => {
+    const initializeApp = async () => {
+      try {
+        console.log("Initializing app data...");
+        
+        // First, check authentication status
+        await checkAuth();
+        
+        if (isAuthenticated) {
+          console.log("User is authenticated, fetching initial data...");
+          
+          // Fetch initial data in parallel for faster loading
+          await Promise.all([
+            fetchPosts({ forceRefresh: true }).catch(e => console.error("Error fetching posts:", e)),
+            fetchTrendingHashtags().catch(e => console.error("Error fetching hashtags:", e)),
+            fetchDoctors().catch(e => console.error("Error fetching doctors:", e)),
+            fetchConnectionRequests().catch(e => console.error("Error fetching connection requests:", e)),
+            fetchDiscussions().catch(e => console.error("Error fetching discussions:", e)),
+            fetchCategories().catch(e => console.error("Error fetching categories:", e)),
+            fetchChats().catch(e => console.error("Error fetching chats:", e)),
+            fetchNotifications().catch(e => console.error("Error fetching notifications:", e))
+          ]);
+          
+          console.log("Initial data loading complete");
+        } else {
+          console.log("User is not authenticated, skipping data fetching");
+        }
+      } catch (error) {
+        console.error("Error during app initialization:", error);
+      } finally {
+        // Mark initialization as complete regardless of success/failure
         setIsInitialized(true);
-        console.log("TabLayout: Marked as initialized even though not authenticated");
-      }, 500);
-    }
+      }
+    };
+
+    initializeApp();
   }, [isAuthenticated]);
 
   useEffect(() => {
@@ -102,8 +112,8 @@ export default function TabLayout() {
 
   return (
     <>
-      {/* Header Icons - Profile and Notification - Don't show on Create page */}
-      {!isCreatePage && (
+      {/* Header Icons - Profile and Notification - Only show on main tab screens */}
+      {shouldShowHeaderIcons() && (
         <SafeAreaView style={[styles.safeArea, isHomePage && styles.safeAreaHome]} pointerEvents="box-none">
           <View style={[styles.headerIconsContainer, isHomePage && styles.headerIconsContainerHome]}>
             <NotificationBell inHeader={true} />
@@ -164,6 +174,15 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
+          name="discussions"
+          options={{
+            title: 'Forum',
+            tabBarIcon: ({ color, size }) => <Newspaper size={size} color={color} />,
+            // Make the forum tab visible
+            tabBarItemStyle: undefined,
+          }}
+        />
+        <Tabs.Screen
           name="create"
           options={{
             title: 'Create',
@@ -208,17 +227,6 @@ export default function TabLayout() {
             // Hide profile tab from bottom navigation
             tabBarItemStyle: { display: 'none' },
             // Keep it accessible through the profile icon header
-          }}
-        />
-        
-        {/* Hidden Discussions tab - Keep functionality but don't display in UI */}
-        <Tabs.Screen
-          name="discussions"
-          options={{
-            title: 'Discussions',
-            tabBarIcon: ({ color, size }) => <MessagesSquare size={size} color={color} />,
-            // Hide discussions tab completely
-            tabBarItemStyle: { display: 'none' },
           }}
         />
       </Tabs>

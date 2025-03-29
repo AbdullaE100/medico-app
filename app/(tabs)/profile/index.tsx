@@ -55,7 +55,8 @@ import {
   Languages,
   ChevronRight as ChevronRightIcon,
   Plus,
-  Clock
+  Clock,
+  CreditCard
 } from 'lucide-react-native';
 import { useProfileStore } from '@/stores/useProfileStore';
 import { useFeedStore } from '@/stores/useFeedStore';
@@ -164,6 +165,9 @@ const PostCard = ({ post }: { post: any }) => {
     }
   };
 
+  // Get the actual reply count from the post object
+  const actualReplyCount = post.replies_count || post.comments_count || 0;
+
   return (
     <View style={styles.postCard}>
       <Text style={styles.postContent}>{post.content}</Text>
@@ -197,7 +201,7 @@ const PostCard = ({ post }: { post: any }) => {
 
         <Pressable style={styles.postAction}>
           <MessageCircle size={20} color="#666666" />
-          <Text style={styles.postActionText}>{post.comments_count || 0}</Text>
+          <Text style={styles.postActionText}>{actualReplyCount}</Text>
         </Pressable>
 
         <Pressable onPress={handleRepost} style={styles.postAction}>
@@ -1000,11 +1004,11 @@ const EmptyPostsSection = () => {
   const handleCreateSample = async () => {
     try {
       setCreating(true);
-      await createPost(
-        "This is a sample post to test that posting works correctly.",
-        ["sample", "test"],
-        []
-      );
+      await createPost({
+        content: "This is a sample post to test that posting works correctly.",
+        hashtags: ["sample", "test"],
+        media_url: []
+      });
       console.log("Created sample post");
     } catch (error) {
       console.error("Error creating sample post:", error);
@@ -1349,6 +1353,25 @@ export default function ProfileScreen() {
           
           {/* Suggested Connections at the end */}
           <SuggestedConnectionsSection suggestedDoctors={suggestedDoctors} />
+
+          {/* Add the business card button in an appropriate section */}
+          <View style={styles.profileActionContainer}>
+            <TouchableOpacity 
+              style={styles.profileActionButton} 
+              onPress={() => router.push('/profile/business-card')}
+            >
+              <View style={styles.profileActionIconContainer}>
+                <CreditCard size={22} color="#0066CC" />
+              </View>
+              <View style={styles.profileActionTextContainer}>
+                <Text style={styles.profileActionTitle}>Digital Business Card</Text>
+                <Text style={styles.profileActionSubtitle}>
+                  View and share your professional card
+                </Text>
+              </View>
+              <ChevronRight size={20} color="#64748B" />
+            </TouchableOpacity>
+          </View>
         </Animated.View>
       </Animated.ScrollView>
     </View>
@@ -2145,5 +2168,36 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 3,
+  },
+  profileActionContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: 'rgba(0, 102, 204, 0.05)',
+    borderRadius: 16,
+    marginBottom: 12,
+  },
+  profileActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 16,
+  },
+  profileActionIconContainer: {
+    marginRight: 12,
+  },
+  profileActionTextContainer: {
+    flex: 1,
+  },
+  profileActionTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  profileActionSubtitle: {
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    color: '#64748b',
   },
 });

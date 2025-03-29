@@ -21,10 +21,35 @@ import {
   Send,
   UserCheck 
 } from 'lucide-react-native';
-import { useFeedStore, Post, Comment } from '@/stores/useFeedStore';
+import { useFeedStore, Comment } from '@/stores/useFeedStore';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { supabase } from '@/lib/supabase';
+
+// Define a more complete Post interface for this component
+interface PostDetail {
+  id?: string;
+  user_id?: string;
+  content: string;
+  media_url?: string[];
+  hashtags?: string[];
+  visibility?: 'public' | 'followers';
+  created_at?: string;
+  updated_at?: string;
+  profile?: {
+    id: string;
+    full_name: string;
+    avatar_url?: string;
+    specialty?: string;
+  };
+  likes_count?: number;
+  comments_count?: number;
+  reposts_count?: number;
+  has_liked?: boolean;
+  has_reposted?: boolean;
+  is_repost?: boolean;
+  original_post_id?: string | null;
+}
 
 const CommentCard = ({ 
   comment, 
@@ -61,90 +86,110 @@ const CommentCard = ({
   const replyCount = comment.replies_count || 0;
 
   return (
-    <View style={[styles.commentCard, nestingLevel > 0 && styles.nestedComment]}>
-      {parentAuthor && nestingLevel > 0 && (
-        <Text style={styles.replyingTo}>Replying to <Text style={styles.replyingToName}>@{parentAuthor}</Text></Text>
-      )}
-      
-      <View style={styles.commentHeader}>
-        <Image 
-          source={{ 
-            uri: comment.author?.avatar_url || 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400'
-          }} 
-          style={styles.commentAvatar} 
-        />
-        <View style={styles.commentAuthorInfo}>
-          <View style={styles.commentAuthorRow}>
-            <Text style={styles.commentAuthorName}>{comment.author?.full_name}</Text>
-            {comment.author?.specialty && (
-              <View style={styles.verifiedBadge}>
-                <Text style={styles.verifiedText}>✓</Text>
-              </View>
-            )}
+    <View style={styles.commentContainer}>
+      <View style={[
+        styles.commentCard, 
+        nestingLevel > 0 && styles.nestedComment,
+        nestingLevel > 0 && { marginLeft: 0 } // Remove default margin for nested comments
+      ]}>
+        {parentAuthor && nestingLevel > 0 && (
+          <Text style={styles.replyingTo}>Replying to <Text style={styles.replyingToName}>@{parentAuthor}</Text></Text>
+        )}
+        
+        <View style={styles.commentHeader}>
+          <Image 
+            source={{ 
+              uri: comment.author?.avatar_url || 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400'
+            }} 
+            style={styles.commentAvatar} 
+          />
+          <View style={styles.commentAuthorInfo}>
+            <View style={styles.commentAuthorRow}>
+              <Text style={styles.commentAuthorName}>{comment.author?.full_name || 'User'}</Text>
+              {comment.author?.specialty && (
+                <View style={styles.verifiedBadge}>
+                  <Text style={styles.verifiedText}>✓</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.commentAuthorSpecialty}>{comment.author?.specialty || ''}</Text>
           </View>
-          <Text style={styles.commentAuthorSpecialty}>{comment.author?.specialty}</Text>
+          <Text style={styles.commentTimestamp}>
+            {comment.created_at ? new Date(comment.created_at).toLocaleDateString() : ''}
+          </Text>
         </View>
-        <Text style={styles.commentTimestamp}>
-          {new Date(comment.created_at).toLocaleDateString()}
-        </Text>
-      </View>
 
-      <Text style={styles.commentContent}>{comment.content}</Text>
+        <Text style={styles.commentContent}>{comment.content}</Text>
 
-      <View style={styles.commentActions}>
-        <Pressable onPress={() => onLike(comment.id)} style={styles.commentAction}>
-          <Heart
-            size={16}
-            color={comment.has_liked ? '#FF4D4D' : '#666666'}
-            fill={comment.has_liked ? '#FF4D4D' : 'transparent'}
-          />
-          <Text style={[
-            styles.commentActionText, 
-            comment.has_liked && styles.commentActionTextActive
-          ]}>
-            {likes > 0 ? likes : ''}
-          </Text>
-        </Pressable>
+        <View style={styles.commentActions}>
+          <Pressable onPress={() => onLike(comment.id)} style={styles.commentAction}>
+            <Heart
+              size={16}
+              color={comment.has_liked ? '#FF4D4D' : '#666666'}
+              fill={comment.has_liked ? '#FF4D4D' : 'transparent'}
+            />
+            <Text style={[
+              styles.commentActionText, 
+              comment.has_liked && styles.commentActionTextActive
+            ]}>
+              {likes > 0 ? likes : ''}
+            </Text>
+          </Pressable>
 
-        <Pressable onPress={() => onReply(comment)} style={styles.commentAction}>
-          <MessageCircle size={16} color="#666666" />
-          <Text style={styles.commentActionText}>
-            {replyCount > 0 ? replyCount : ''}
-          </Text>
-        </Pressable>
+          <Pressable onPress={() => onReply(comment)} style={styles.commentAction}>
+            <MessageCircle size={16} color="#666666" />
+            <Text style={styles.commentActionText}>
+              {replyCount > 0 ? replyCount : ''}
+            </Text>
+          </Pressable>
 
-        <Pressable onPress={() => onRepost(comment)} style={styles.commentAction}>
-          <Repeat2
-            size={16}
-            color={comment.has_reposted ? '#22C55E' : '#666666'}
-          />
-          <Text style={[
-            styles.commentActionText,
-            comment.has_reposted && styles.commentActionTextReposted
-          ]}>
-            {reposts > 0 ? reposts : ''}
-          </Text>
-        </Pressable>
+          <Pressable onPress={() => onRepost(comment)} style={styles.commentAction}>
+            <Repeat2
+              size={16}
+              color={comment.has_reposted ? '#22C55E' : '#666666'}
+            />
+            <Text style={[
+              styles.commentActionText,
+              comment.has_reposted && styles.commentActionTextReposted
+            ]}>
+              {reposts > 0 ? reposts : ''}
+            </Text>
+          </Pressable>
 
-        <Pressable style={styles.commentAction}>
-          <Share2 size={16} color="#666666" />
-        </Pressable>
+          <Pressable style={styles.commentAction}>
+            <Share2 size={16} color="#666666" />
+          </Pressable>
+        </View>
       </View>
 
       {showReplies && hasReplies && (
         <View style={styles.repliesContainer}>
+          {hasReplies && (
+            <View style={styles.repliesHeader}>
+              <View style={styles.repliesLine} />
+              <Text style={styles.repliesCount}>
+                {replies.length} {replies.length === 1 ? 'reply' : 'replies'}
+              </Text>
+              <View style={styles.repliesLine} />
+            </View>
+          )}
+          
           {visibleReplies.map((reply) => (
-            <CommentCard
-              key={reply.id}
-              comment={reply}
-              onReply={onReply}
-              onLike={onLike}
-              onRepost={onRepost}
-              nestingLevel={nestingLevel + 1}
-              parentAuthor={comment.author?.full_name}
-              showReplies={nestingLevel < 2} // Limit nesting to 3 levels
-              allComments={allComments}
-            />
+            <View key={reply.id} style={styles.replyWrapper}>
+              <View style={styles.replyIndentLine} />
+              <View style={styles.replyContent}>
+                <CommentCard
+                  comment={reply}
+                  onReply={onReply}
+                  onLike={onLike}
+                  onRepost={onRepost}
+                  nestingLevel={nestingLevel + 1}
+                  parentAuthor={comment.author?.full_name}
+                  showReplies={nestingLevel < 2} // Limit nesting to 3 levels
+                  allComments={allComments}
+                />
+              </View>
+            </View>
           ))}
           
           {hasMoreReplies && (
@@ -178,7 +223,7 @@ export default function PostDetail() {
     likeComment,
     repostComment
   } = useFeedStore();
-  const [post, setPost] = useState<Post | null>(null);
+  const [post, setPost] = useState<PostDetail | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -212,6 +257,31 @@ export default function PostDetail() {
     try {
       const commentsData = await fetchComments(id as string);
       setComments(commentsData);
+      
+      // Fetch the updated post to get accurate comments_count after loading comments
+      const { data: updatedPost } = await supabase
+        .from('posts')
+        .select('*')
+        .eq('id', id)
+        .single();
+        
+      if (updatedPost && post) {
+        // Create updated post object with the latest comment count
+        const updatedPostWithAuthor = {
+          ...post,
+          comments_count: updatedPost.comments_count || 0
+        };
+        
+        // Update local post state
+        setPost(updatedPostWithAuthor);
+        
+        // Also update the post in the global store to ensure consistency
+        useFeedStore.setState(state => ({
+          posts: state.posts.map(p => 
+            p.id === post.id ? updatedPostWithAuthor : p
+          )
+        }));
+      }
     } catch (error) {
       console.error('Error loading comments:', error);
     } finally {
@@ -220,7 +290,7 @@ export default function PostDetail() {
   };
 
   const handleLike = async () => {
-    if (!post) return;
+    if (!post || !post.id) return;
     try {
       await likePost(post.id);
     } catch (error) {
@@ -229,7 +299,7 @@ export default function PostDetail() {
   };
 
   const handleRepost = async () => {
-    if (!post) return;
+    if (!post || !post.id) return;
     try {
       await repostPost(post.id);
     } catch (error) {
@@ -252,46 +322,8 @@ export default function PostDetail() {
       
       setNewComment('');
       
-      // Fetch the updated post to get accurate comments_count
-      const { data: updatedPost } = await supabase
-        .from('posts')
-        .select('*')
-        .eq('id', id)
-        .single();
-        
-      if (updatedPost && post) {
-        const updatedPostWithAuthor = {
-          ...post,
-          comments_count: updatedPost.comments_count || 0
-        };
-        
-        // Update local post state
-        setPost(updatedPostWithAuthor);
-        
-        // Also update the post in the global store to ensure consistency
-        useFeedStore.setState(state => ({
-          posts: state.posts.map(p => 
-            p.id === post.id ? updatedPostWithAuthor : p
-          )
-        }));
-      } else {
-        // Fallback: Increment local count if we couldn't fetch
-        if (post) {
-          const incrementedPost = {
-            ...post,
-            comments_count: (post.comments_count || 0) + 1
-          };
-          setPost(incrementedPost);
-          
-          useFeedStore.setState(state => ({
-            posts: state.posts.map(p => 
-              p.id === post.id ? incrementedPost : p
-            )
-          }));
-        }
-      }
-      
-      await loadComments(); // Refresh comments after posting
+      // Load comments will also refresh the post data
+      await loadComments(); 
       
       // Scroll to bottom after comment is added
       setTimeout(() => {
@@ -374,200 +406,188 @@ export default function PostDetail() {
     }
   };
 
-  if (isLoading && !post) {
-    return <LoadingOverlay message="Loading post..." />;
-  }
-
-  if (!post) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <ArrowLeft size={24} color="#1A1A1A" />
-          </Pressable>
-          <Text style={styles.headerTitle}>Post</Text>
-        </View>
-        <View style={styles.centerContent}>
-          <Text style={styles.notFoundText}>Post not found</Text>
-        </View>
-      </View>
-    );
-  }
-
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
     >
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <ArrowLeft size={24} color="#1A1A1A" />
-          </Pressable>
-          <Text style={styles.headerTitle}>Post</Text>
-        </View>
+      <View style={styles.header}>
+        <Pressable onPress={() => router.back()} style={styles.backButton}>
+          <ArrowLeft size={24} color="#000000" />
+        </Pressable>
+        <Text style={styles.headerTitle}>Post</Text>
+      </View>
 
-        {error && (
-          <ErrorMessage 
-            message={error} 
-            onDismiss={() => useFeedStore.setState({ error: null })}
-          />
-        )}
-
-        <ScrollView 
-          style={styles.content}
-          ref={scrollViewRef}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.postCard}>
-            <View style={styles.postHeader}>
-              <Image 
-                source={{ 
-                  uri: post.author?.avatar_url || 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400'
-                }} 
-                style={styles.avatar} 
-              />
-              <View style={styles.authorInfo}>
-                <View style={styles.nameRow}>
-                  <Text style={styles.authorName}>{post.author?.full_name}</Text>
-                  <View style={styles.verifiedBadge}>
-                    <Text style={styles.verifiedText}>✓</Text>
+      <View style={styles.content}>
+        {isLoading && !post ? (
+          <LoadingOverlay message="Loading post..." />
+        ) : error ? (
+          <ErrorMessage message={error} />
+        ) : !post ? (
+          <View style={styles.centerContent}>
+            <Text style={styles.notFoundText}>Post not found</Text>
+          </View>
+        ) : (
+          <>
+            <ScrollView 
+              style={styles.content} 
+              contentContainerStyle={{ paddingBottom: 100 }}
+              ref={scrollViewRef}
+            >
+              <View style={styles.postCard}>
+                <View style={styles.postHeader}>
+                  <Image 
+                    source={{ 
+                      uri: post.profile?.avatar_url || 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400'
+                    }} 
+                    style={styles.avatar} 
+                  />
+                  <View style={styles.authorInfo}>
+                    <View style={styles.nameRow}>
+                      <Text style={styles.authorName}>{post.profile?.full_name || 'User'}</Text>
+                      {post.profile?.specialty && (
+                        <View style={styles.verifiedBadge}>
+                          <Text style={styles.verifiedText}>✓</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.authorSpecialty}>{post.profile?.specialty || ''}</Text>
+                    <Text style={styles.timestamp}>
+                      {post.created_at ? new Date(post.created_at).toLocaleDateString() : ''}
+                    </Text>
                   </View>
                 </View>
-                <Text style={styles.authorSpecialty}>{post.author?.specialty}</Text>
-                <Text style={styles.timestamp}>
-                  {new Date(post.created_at).toLocaleDateString()}
-                </Text>
-              </View>
-            </View>
 
-            <Text style={styles.postContent}>{post.content}</Text>
-            
-            {post.media_url?.map((url, index) => (
-              <Image 
-                key={index}
-                source={{ uri: url }} 
-                style={styles.postImage}
-                resizeMode="cover"
-              />
-            ))}
+                <Text style={styles.postContent}>{post.content}</Text>
 
-            {post.hashtags && post.hashtags.length > 0 && (
-              <View style={styles.hashtags}>
-                {post.hashtags.map((tag) => (
-                  <Text key={tag} style={styles.hashtag}>#{tag}</Text>
-                ))}
-              </View>
-            )}
+                {post.media_url && post.media_url.length > 0 && (
+                  <Image 
+                    source={{ uri: post.media_url[0] }} 
+                    style={styles.postImage}
+                    resizeMode="cover"
+                  />
+                )}
 
-            <View style={styles.engagement}>
-              <Pressable onPress={handleLike} style={styles.engagementButton}>
-                <Heart 
-                  size={20} 
-                  color={post.has_liked ? '#FF4D4D' : '#666666'} 
-                  fill={post.has_liked ? '#FF4D4D' : 'transparent'} 
-                />
-                <Text style={styles.engagementText}>{post.likes_count}</Text>
-              </Pressable>
+                {post.hashtags && post.hashtags.length > 0 && (
+                  <View style={styles.hashtags}>
+                    {post.hashtags.map((tag, index) => (
+                      <Text key={index} style={styles.hashtag}>#{tag}</Text>
+                    ))}
+                  </View>
+                )}
 
-              <Pressable style={styles.engagementButton}>
-                <MessageCircle size={20} color="#666666" />
-                <Text style={styles.engagementText}>
-                  {post.comments_count === 1 ? '1' : (post.comments_count || 0)}
-                </Text>
-              </Pressable>
-
-              <Pressable onPress={handleRepost} style={styles.engagementButton}>
-                <Repeat2 
-                  size={20} 
-                  color={post.has_reposted ? '#22C55E' : '#666666'} 
-                />
-                <Text style={styles.engagementText}>{post.reposts_count}</Text>
-              </Pressable>
-
-              <Pressable style={styles.engagementButton}>
-                <Share2 size={20} color="#666666" />
-              </Pressable>
-            </View>
-          </View>
-
-          <View style={styles.commentsSection}>
-            <Text style={styles.commentsTitle}>
-              {post?.comments_count === 1 
-                ? '1 Comment' 
-                : `${post?.comments_count || 0} Comments`}
-            </Text>
-            
-            {commentsLoading ? (
-              <View style={styles.loadingComments}>
-                <ActivityIndicator size="small" color="#0066CC" />
-                <Text style={styles.loadingText}>Loading comments...</Text>
-              </View>
-            ) : comments.length > 0 ? (
-              <>
-                {/* Only show top-level comments (no parent_id) */}
-                {comments
-                  .filter(comment => !comment.parent_id)
-                  .map((comment) => (
-                    <CommentCard 
-                      key={comment.id} 
-                      comment={comment} 
-                      onReply={handleReplyToComment}
-                      onLike={handleLikeComment}
-                      onRepost={handleRepostComment}
-                      allComments={comments}
+                <View style={styles.engagement}>
+                  <Pressable onPress={handleLike} style={styles.engagementButton}>
+                    <Heart 
+                      size={20} 
+                      color={post.has_liked ? '#FF4D4D' : '#666666'} 
+                      fill={post.has_liked ? '#FF4D4D' : 'transparent'}
                     />
-                  ))
-                }
-              </>
-            ) : (
-              <View style={styles.noComments}>
-                <MessageCircle size={24} color="#666666" />
-                <Text style={styles.noCommentsText}>No comments yet</Text>
-                <Text style={styles.noCommentsSubtext}>Be the first to comment</Text>
-              </View>
-            )}
-          </View>
-        </ScrollView>
+                    <Text style={styles.engagementText}>{post.likes_count || 0}</Text>
+                  </Pressable>
 
-        <View style={styles.commentInputContainer}>
-          {replyingTo && (
-            <View style={styles.replyingToContainer}>
-              <Text style={styles.replyingToLabel}>
-                Replying to <Text style={styles.replyingToName}>@{replyingTo.author?.full_name}</Text>
-              </Text>
-              <Pressable onPress={() => setReplyingTo(null)}>
-                <Text style={styles.cancelReply}>Cancel</Text>
-              </Pressable>
-            </View>
-          )}
-          
-          <View style={styles.commentInputRow}>
-            <TextInput
-              style={styles.commentInput}
-              placeholder="Add a comment..."
-              value={newComment}
-              onChangeText={setNewComment}
-              multiline
-              editable={!isSubmitting}
-            />
-            <Pressable 
-              onPress={handleSubmitComment} 
-              disabled={!newComment.trim() || isSubmitting}
-              style={[
-                styles.sendButton, 
-                (!newComment.trim() || isSubmitting) && styles.sendButtonDisabled
-              ]}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Send size={20} color="#FFFFFF" />
+                  <Pressable style={styles.engagementButton}>
+                    <MessageCircle size={20} color="#666666" />
+                    <Text style={styles.engagementText}>{comments.length || 0}</Text>
+                  </Pressable>
+
+                  <Pressable onPress={handleRepost} style={styles.engagementButton}>
+                    <Repeat2 
+                      size={20} 
+                      color={post.has_reposted ? '#22C55E' : '#666666'} 
+                    />
+                    <Text style={styles.engagementText}>{post.reposts_count || 0}</Text>
+                  </Pressable>
+
+                  <Pressable style={styles.engagementButton}>
+                    <Share2 size={20} color="#666666" />
+                  </Pressable>
+                </View>
+              </View>
+              
+              <View style={styles.commentsSection}>
+                <Text style={styles.commentsTitle}>
+                  {comments.length === 1 
+                    ? '1 Comment' 
+                    : `${comments.length} Comments`}
+                </Text>
+                
+                {commentsLoading ? (
+                  <View style={styles.loadingComments}>
+                    <ActivityIndicator size="small" color="#0066CC" />
+                    <Text style={styles.loadingText}>Loading comments...</Text>
+                  </View>
+                ) : comments.length > 0 ? (
+                  <>
+                    {/* Only show top-level comments (no parent_id) */}
+                    {comments
+                      .filter(comment => !comment.parent_id)
+                      .map((comment) => (
+                        <CommentCard 
+                          key={comment.id} 
+                          comment={comment} 
+                          onReply={handleReplyToComment}
+                          onLike={handleLikeComment}
+                          onRepost={handleRepostComment}
+                          allComments={comments}
+                        />
+                      ))
+                    }
+                  </>
+                ) : (
+                  <View style={styles.noComments}>
+                    <MessageCircle size={24} color="#666666" />
+                    <Text style={styles.noCommentsText}>No comments yet</Text>
+                    <Text style={styles.noCommentsSubtext}>Be the first to comment</Text>
+                  </View>
+                )}
+              </View>
+            </ScrollView>
+            
+            <View style={styles.commentInputContainer}>
+              {replyingTo && (
+                <View style={styles.replyingToContainer}>
+                  <View style={styles.replyingToContent}>
+                    <MessageCircle size={16} color="#0066CC" />
+                    <Text style={styles.replyingToLabel}>
+                      Replying to <Text style={styles.replyingToName}>@{replyingTo.author?.full_name}</Text>
+                    </Text>
+                  </View>
+                  <Pressable onPress={() => setReplyingTo(null)} style={styles.cancelReplyButton}>
+                    <Text style={styles.cancelReply}>Cancel</Text>
+                  </Pressable>
+                </View>
               )}
-            </Pressable>
-          </View>
-        </View>
+              
+              <View style={styles.commentInputRow}>
+                <TextInput
+                  style={[styles.commentInput, replyingTo && styles.commentInputReplying]}
+                  placeholder={replyingTo ? "Write a reply..." : "Add a comment..."}
+                  value={newComment}
+                  onChangeText={setNewComment}
+                  multiline
+                  editable={!isSubmitting}
+                />
+                <Pressable 
+                  onPress={handleSubmitComment} 
+                  disabled={!newComment.trim() || isSubmitting}
+                  style={[
+                    styles.sendButton, 
+                    replyingTo && styles.sendButtonReplying,
+                    (!newComment.trim() || isSubmitting) && styles.sendButtonDisabled
+                  ]}
+                >
+                  {isSubmitting ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Send size={20} color="#FFFFFF" />
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          </>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -720,11 +740,13 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     marginBottom: 16,
   },
+  commentContainer: {
+    marginBottom: 16,
+  },
   commentCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -803,25 +825,68 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   commentInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
+    backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#E5E5E5',
-    backgroundColor: '#FFFFFF',
+  },
+  replyingToContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#EBF2FA',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    borderWidth: 1,
+    borderColor: '#D1E3F6',
+    marginBottom: -1,
+    borderBottomWidth: 0,
+  },
+  replyingToContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  replyingToLabel: {
+    fontSize: 14,
+    color: '#555555',
+    fontFamily: 'Inter_400Regular',
+  },
+  replyingToName: {
+    color: '#0066CC',
+    fontFamily: 'Inter_600SemiBold',
+  },
+  cancelReplyButton: {
+    padding: 4,
+  },
+  cancelReply: {
+    fontSize: 14,
+    color: '#0066CC',
+    fontFamily: 'Inter_500Medium',
+  },
+  commentInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
   },
   commentInput: {
     flex: 1,
     backgroundColor: '#F0F2F5',
     borderRadius: 20,
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 10,
     maxHeight: 100,
     fontSize: 14,
     fontFamily: 'Inter_400Regular',
     color: '#1A1A1A',
   },
-  commentButton: {
+  commentInputReplying: {
+    backgroundColor: '#EBF5FF',
+    borderColor: '#D1E3F6',
+    borderWidth: 1,
+  },
+  sendButton: {
     backgroundColor: '#0066CC',
     borderRadius: 20,
     width: 40,
@@ -830,16 +895,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginLeft: 8,
   },
-  commentButtonDisabled: {
+  sendButtonReplying: {
+    backgroundColor: '#3384D7',
+  },
+  sendButtonDisabled: {
     backgroundColor: '#A9C2D9',
   },
   nestedComment: {
-    marginLeft: 20,
-    borderLeftWidth: 1,
-    borderLeftColor: '#E5E5E5',
-    paddingLeft: 12,
-    marginTop: 8,
+    backgroundColor: '#F8F9FB',
+    borderLeftWidth: 0,
+    paddingLeft: 16,
     shadowOpacity: 0.02,
+    borderRadius: 10,
   },
   commentActions: {
     flexDirection: 'row',
@@ -864,11 +931,44 @@ const styles = StyleSheet.create({
     color: '#22C55E',
   },
   repliesContainer: {
+    paddingLeft: 16,
     marginTop: 8,
+  },
+  repliesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  repliesLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E5E5E5',
+  },
+  repliesCount: {
+    color: '#666666',
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
+    marginHorizontal: 8,
+  },
+  replyWrapper: {
+    flexDirection: 'row',
+    marginTop: 8,
+  },
+  replyIndentLine: {
+    width: 2,
+    backgroundColor: '#0066CC',
+    marginRight: 12,
+    borderRadius: 4,
+  },
+  replyContent: {
+    flex: 1,
   },
   showMoreRepliesButton: {
     paddingVertical: 8,
+    paddingLeft: 24,
     alignItems: 'flex-start',
+    marginTop: 4,
   },
   showMoreRepliesText: {
     color: '#0066CC',
@@ -879,46 +979,15 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666666',
     fontFamily: 'Inter_400Regular',
-    marginBottom: 4,
+    marginBottom: 8,
+    backgroundColor: '#F0F2F5',
+    padding: 4,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
   },
   replyingToName: {
     color: '#0066CC',
-  },
-  replyingToContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#F0F2F5',
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    marginBottom: -8,
-  },
-  replyingToLabel: {
-    fontSize: 14,
-    color: '#666666',
-    fontFamily: 'Inter_400Regular',
-  },
-  cancelReply: {
-    fontSize: 14,
-    color: '#0066CC',
     fontFamily: 'Inter_500Medium',
-  },
-  commentInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  sendButton: {
-    backgroundColor: '#0066CC',
-    borderRadius: 20,
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
-  },
-  sendButtonDisabled: {
-    backgroundColor: '#A9C2D9',
   },
 }); 

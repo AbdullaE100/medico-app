@@ -12,13 +12,29 @@ import RepostModal from '../../components/RepostModal';
 const { width, height } = Dimensions.get('window');
 const AVATAR_SIZE = 40;
 
+// Add these properties to the existing Post interface at the top of the file
+// Note: This is a local extension to the Post interface from useFeedStore
+interface ExtendedPost extends Post {
+  quoted_post_id?: string;
+  quoted_post_content?: string;
+  has_liked?: boolean;
+  has_reposted?: boolean;
+  replies_count?: number;
+  author?: {
+    full_name: string;
+    avatar_url?: string;
+    specialty?: string;
+    verified?: boolean;
+  };
+}
+
 // Thread-style PostCard
 const PostCard = React.memo(({ post, onOptionPress, index, onComment, onRepost }: { 
-  post: Post; 
+  post: ExtendedPost; 
   onOptionPress: () => void; 
   index: number; 
   onComment: (postId: string) => void;
-  onRepost: (post: Post) => void;
+  onRepost: (post: ExtendedPost) => void;
 }) => {
   const { likePost, unlikePost } = useFeedStore();
   const [isLiking, setIsLiking] = useState(false);
@@ -145,7 +161,7 @@ const PostCard = React.memo(({ post, onOptionPress, index, onComment, onRepost }
                   {post.profile?.full_name || 'Medical Professional'}
                 </Text>
               </TouchableOpacity>
-              {Boolean(post.profile?.verified) && (
+              {Boolean(post.author?.verified) && (
                 <Image 
                   source={{ uri: 'https://placehold.co/16x16/0066ff/0066ff' }} 
                   style={styles.verifiedBadge} 
@@ -246,7 +262,7 @@ const PostCard = React.memo(({ post, onOptionPress, index, onComment, onRepost }
                   />
                 </View>
                 <Text style={styles.engagementStats}>
-                  {post.comments_count || 0} replies • {post.likes_count || 0} likes
+                  {post.replies_count || post.comments_count || 0} replies • {post.likes_count || 0} likes
                 </Text>
               </View>
             </TouchableOpacity>
@@ -258,7 +274,10 @@ const PostCard = React.memo(({ post, onOptionPress, index, onComment, onRepost }
 });
 
 // Thread-inspired Header
-const HomeHeader = () => {
+const HomeHeader = ({ activeTab, onTabChange }: { 
+  activeTab: 'all' | 'following'; 
+  onTabChange: (tab: 'all' | 'following') => void 
+}) => {
   return (
     <View style={styles.headerContainer}>
       {/* Top header with Back, Instagram, and More icons */}
@@ -276,14 +295,25 @@ const HomeHeader = () => {
         </View>
       </View>
       
-      {/* Threads/Replies Tabs */}
+      {/* For You/Following Tabs */}
       <View style={styles.tabsContainer}>
-        <TouchableOpacity style={[styles.tab, styles.activeTab]}>
-          <Text style={styles.activeTabText}>Threads</Text>
-          <View style={styles.activeTabIndicator} />
+        <TouchableOpacity 
+          style={[styles.tab, activeTab === 'all' && styles.activeTab]}
+          onPress={() => onTabChange('all')}
+        >
+          <Text style={activeTab === 'all' ? styles.activeTabText : styles.tabText}>
+            For You
+          </Text>
+          {activeTab === 'all' && <View style={styles.activeTabIndicator} />}
         </TouchableOpacity>
-        <TouchableOpacity style={styles.tab}>
-          <Text style={styles.tabText}>Replies</Text>
+        <TouchableOpacity 
+          style={[styles.tab, activeTab === 'following' && styles.activeTab]}
+          onPress={() => onTabChange('following')}
+        >
+          <Text style={activeTab === 'following' ? styles.activeTabText : styles.tabText}>
+            Following
+          </Text>
+          {activeTab === 'following' && <View style={styles.activeTabIndicator} />}
         </TouchableOpacity>
       </View>
     </View>
@@ -292,25 +322,39 @@ const HomeHeader = () => {
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { posts, isLoading, error, loadPosts, likePost, deletePost } = useFeedStore();
+  const { posts, isLoading, error, fetchPosts, loadPosts, likePost, deletePost, refreshPosts } = useFeedStore();
   const [refreshing, setRefreshing] = useState(false);
   const [optionsVisible, setOptionsVisible] = useState(false);
   const [selectedPost, setSelectedPost] = useState<string | null>(null);
-  const [selectedPostData, setSelectedPostData] = useState<Post | null>(null);
+  const [selectedPostData, setSelectedPostData] = useState<ExtendedPost | null>(null);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [shareModalVisible, setShareModalVisible] = useState(false);
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [repostModalVisible, setRepostModalVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState<'all' | 'following'>('all');
   
-  // Load posts on component mount
+  // Load posts on component mount or when tab changes
   useEffect(() => {
-    loadPosts();
-  }, []);
+    if (activeTab === 'all') {
+      loadPosts();
+    } else {
+      // Load posts from followed connections
+      fetchPosts({ following: true });
+    }
+  }, [activeTab]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadPosts();
+    if (activeTab === 'all') {
+      await loadPosts();
+    } else {
+      await refreshPosts({ following: true });
+    }
     setRefreshing(false);
+  };
+
+  const handleTabChange = (tab: 'all' | 'following') => {
+    setActiveTab(tab);
   };
 
   const handlePostOptions = useCallback((postId: string | undefined) => {
@@ -367,7 +411,7 @@ export default function HomeScreen() {
     setSelectedPost(null);
   }, []);
   
-  const handleOpenRepostModal = useCallback((post: Post) => {
+  const handleOpenRepostModal = useCallback((post: ExtendedPost) => {
     setSelectedPostData(post);
     setRepostModalVisible(true);
   }, []);
@@ -378,7 +422,7 @@ export default function HomeScreen() {
   }, []);
 
   // Render a post with our beautiful PostCard component
-  const renderPostItem = ({ item, index }: { item: Post; index: number }) => {
+  const renderPostItem = ({ item, index }: { item: ExtendedPost; index: number }) => {
     // Skip rendering if post ID is missing
     if (!item.id) return null;
     
@@ -394,24 +438,38 @@ export default function HomeScreen() {
   };
 
   // Empty state
-  const EmptyState = () => (
+  const EmptyState = ({ activeTab }: { activeTab: 'all' | 'following' }) => (
     <View style={styles.emptyContainer}>
       <View style={styles.emptyIconContainer}>
         <MessageCircle size={28} color="#000" />
       </View>
       
-      <Text style={styles.emptyTitle}>No posts yet</Text>
+      <Text style={styles.emptyTitle}>
+        {activeTab === 'all' ? 'No posts yet' : 'No posts from connections'}
+      </Text>
       <Text style={styles.emptyDescription}>
-        Medical posts from people you follow will appear here
+        {activeTab === 'all' 
+          ? 'Medical posts will appear here' 
+          : 'Follow more doctors to see their posts here'}
       </Text>
       
-      <TouchableOpacity 
-        style={styles.createPostButton}
-        onPress={() => router.push('/create')}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.createPostButtonText}>Create Post</Text>
-      </TouchableOpacity>
+      {activeTab === 'all' ? (
+        <TouchableOpacity 
+          style={styles.createPostButton}
+          onPress={() => router.push('/create')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.createPostButtonText}>Create Post</Text>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity 
+          style={styles.createPostButton}
+          onPress={() => router.push('/network')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.createPostButtonText}>Find Connections</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 
@@ -424,7 +482,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <HomeHeader />
+      <HomeHeader activeTab={activeTab} onTabChange={handleTabChange} />
       
       {isLoading && !refreshing ? (
         <LoadingState />
@@ -433,7 +491,13 @@ export default function HomeScreen() {
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity 
             style={styles.retryButton}
-            onPress={loadPosts}
+            onPress={() => {
+              if (activeTab === 'all') {
+                loadPosts();
+              } else {
+                fetchPosts({ following: true });
+              }
+            }}
           >
             <Text style={styles.retryButtonText}>Try Again</Text>
           </TouchableOpacity>
@@ -452,7 +516,7 @@ export default function HomeScreen() {
               tintColor="#000"
             />
           }
-          ListEmptyComponent={<EmptyState />}
+          ListEmptyComponent={<EmptyState activeTab={activeTab} />}
           ItemSeparatorComponent={() => <View style={styles.postSeparator} />}
         />
       )}

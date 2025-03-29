@@ -653,7 +653,7 @@ export const useFeedStore = create<FeedStore>((set, get) => ({
         }
       }
 
-      // Update post comments count in database
+      // Update post comments count in database using the new function
       try {
         await supabase.rpc('increment_post_comments_count', { 
           p_post_id: postId 
@@ -663,17 +663,17 @@ export const useFeedStore = create<FeedStore>((set, get) => ({
         
         // Fallback: Update the post's comments_count directly if the RPC doesn't exist
         try {
-          const { data: post } = await supabase
-            .from('posts')
-            .select('comments_count')
-            .eq('id', postId)
-            .single();
+          // Get the accurate count of all comments for this post
+          const { data: commentsCount, error: countError } = await supabase
+            .from('post_comments')
+            .select('id', { count: 'exact' })
+            .eq('post_id', postId);
             
-          if (post) {
-            const updatedCount = (post.comments_count || 0) + 1;
+          if (!countError) {
+            const count = commentsCount?.length || 0;
             await supabase
               .from('posts')
-              .update({ comments_count: updatedCount })
+              .update({ comments_count: count })
               .eq('id', postId);
           }
         } catch (error) {

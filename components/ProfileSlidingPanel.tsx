@@ -8,8 +8,9 @@ import {
   Image,
   Platform,
   ScrollView,
+  ActivityIndicator,
   Modal,
-  ActivityIndicator
+  Linking
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, {
@@ -20,7 +21,8 @@ import Animated, {
   runOnJS,
   interpolate,
   Extrapolate,
-  useDerivedValue
+  useDerivedValue,
+  withRepeat
 } from 'react-native-reanimated';
 import {
   Gesture,
@@ -34,11 +36,17 @@ import {
   LogOut,
   X,
   ChevronRight,
+  MapPin,
+  Stethoscope,
+  UserCheck,
   Share2,
   QrCode,
-  Shield,
-  Clock,
-  Star
+  Mail,
+  Phone,
+  Globe,
+  Sparkles,
+  Download,
+  Award
 } from 'lucide-react-native';
 import { useProfileStore } from '@/stores/useProfileStore';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -65,8 +73,8 @@ const ProfileSlidingPanel: React.FC<ProfileSlidingPanelProps> = ({
 }) => {
   const router = useRouter();
   const { profile, fetchProfile, isLoading } = useProfileStore();
-  const [showBusinessCardModal, setShowBusinessCardModal] = useState(false);
   const [profileLoadError, setProfileLoadError] = useState(false);
+  const [showBusinessCardModal, setShowBusinessCardModal] = useState(false);
 
   // Animation values
   const translateX = useSharedValue(PANEL_WIDTH);
@@ -249,9 +257,11 @@ const ProfileSlidingPanel: React.FC<ProfileSlidingPanelProps> = ({
             <Text style={styles.profileName}>
               {profile?.full_name || "Your Name"}
             </Text>
-            <Text style={styles.profileSpecialty}>
-              {profile?.specialty || "Healthcare Professional"}
-            </Text>
+            <View style={styles.specialtyContainer}>
+              <Text style={styles.profileSpecialty}>
+                {profile?.specialty || "Healthcare Professional"}
+              </Text>
+            </View>
           </View>
         </View>
 
@@ -261,36 +271,85 @@ const ProfileSlidingPanel: React.FC<ProfileSlidingPanelProps> = ({
           bounces={false}
           overScrollMode="never"
         >
+          {/* Specialty highlight section */}
           {profile?.specialty && (
-            <View style={styles.statsContainer}>
-              <View style={styles.statItem}>
-                <Shield size={20} color="#0066CC" />
-                <Text style={styles.statValue}>{profile?.years_experience || "5+"}</Text>
-                <Text style={styles.statLabel}>Years</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Star size={20} color="#0066CC" />
-                <Text style={styles.statValue}>{profile?.rating || "4.9"}</Text>
-                <Text style={styles.statLabel}>Rating</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Clock size={20} color="#0066CC" />
-                <Text style={styles.statValue}>{profile?.patients_count || "120+"}</Text>
-                <Text style={styles.statLabel}>Patients</Text>
-              </View>
+            <View style={styles.specialtyHighlightContainer}>
+              <LinearGradient
+                colors={['rgba(0, 102, 204, 0.15)', 'rgba(0, 145, 255, 0.25)']}
+                style={styles.specialtyHighlightGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Stethoscope size={22} color="#0066CC" />
+                <Text style={styles.specialtyHighlightText}>
+                  {profile.specialty}
+                </Text>
+              </LinearGradient>
             </View>
           )}
 
-          <TouchableOpacity 
-            style={styles.menuItem}
-            onPress={() => navigateTo('/profile')}
-          >
-            <View style={styles.menuItemLeft}>
-              <User size={22} color="#0066CC" />
-              <Text style={styles.menuItemText}>View Full Profile</Text>
-            </View>
-            <ChevronRight size={18} color="#999" />
-          </TouchableOpacity>
+          {/* Professional information section */}
+          <View style={styles.infoSectionContainer}>
+            {profile?.hospital && (
+              <View style={styles.infoCard}>
+                <LinearGradient
+                  colors={['rgba(0, 102, 204, 0.1)', 'rgba(0, 145, 255, 0.1)']}
+                  style={styles.infoCardGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <View style={styles.infoItem}>
+                    <Briefcase size={18} color="#0066CC" />
+                    <Text style={styles.infoItemText}>{profile.hospital}</Text>
+                  </View>
+                </LinearGradient>
+              </View>
+            )}
+            
+            {profile?.location && (
+              <View style={styles.infoCard}>
+                <LinearGradient
+                  colors={['rgba(0, 102, 204, 0.1)', 'rgba(0, 145, 255, 0.1)']}
+                  style={styles.infoCardGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <View style={styles.infoItem}>
+                    <MapPin size={18} color="#0066CC" />
+                    <Text style={styles.infoItemText}>{profile.location}</Text>
+                  </View>
+                </LinearGradient>
+              </View>
+            )}
+
+            {profile?.bio && (
+              <View style={styles.bioContainer}>
+                <Text style={styles.sectionTitle}>About</Text>
+                <View style={styles.bioCardContainer}>
+                  <Text style={styles.bioText}>{profile.bio}</Text>
+                </View>
+              </View>
+            )}
+            
+            {profile?.expertise && profile.expertise.length > 0 && (
+              <View style={styles.expertiseContainer}>
+                <Text style={styles.sectionTitle}>Areas of Expertise</Text>
+                <View style={styles.expertiseTagsContainer}>
+                  {profile.expertise.map((area, index) => (
+                    <LinearGradient
+                      key={index}
+                      colors={['rgba(0, 102, 204, 0.08)', 'rgba(0, 145, 255, 0.12)']}
+                      style={styles.expertiseTag}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      <Text style={styles.expertiseTagText}>{area}</Text>
+                    </LinearGradient>
+                  ))}
+                </View>
+              </View>
+            )}
+          </View>
 
           <TouchableOpacity 
             style={styles.menuItem}
@@ -308,8 +367,8 @@ const ProfileSlidingPanel: React.FC<ProfileSlidingPanelProps> = ({
             onPress={openBusinessCard}
           >
             <View style={styles.menuItemLeft}>
-              <Briefcase size={22} color="#0066CC" />
-              <Text style={styles.menuItemText}>Business Card</Text>
+              <Award size={22} color="#0066CC" />
+              <Text style={styles.menuItemText}>Digital Business Card</Text>
             </View>
             <ChevronRight size={18} color="#999" />
           </TouchableOpacity>
@@ -401,14 +460,15 @@ const BusinessCardModal: React.FC<BusinessCardModalProps> = ({
 }) => {
   // Animation values
   const translateY = useSharedValue(300);
-  const scale = useSharedValue(0.8);
+  const scale = useSharedValue(0.95);
   const opacity = useSharedValue(0);
-  const rotation = useSharedValue(0);
-
+  const cardRotation = useSharedValue(0);
+  const gradientPosition = useSharedValue(0);
+  
   useEffect(() => {
     if (isVisible) {
-      // Sequence of animations for elegant opening
-      opacity.value = withTiming(1, { duration: 300 });
+      // Beautiful entrance animation sequence
+      opacity.value = withTiming(1, { duration: 350 });
       translateY.value = withSpring(0, {
         ...SPRING_CONFIG,
         stiffness: 80,
@@ -416,41 +476,48 @@ const BusinessCardModal: React.FC<BusinessCardModalProps> = ({
       });
       scale.value = withSpring(1, SPRING_CONFIG);
       
-      // Subtle rotation effect
-      rotation.value = withTiming(0, { duration: 500 });
+      // Subtle rotation reset
+      cardRotation.value = withTiming(0, { duration: 400 });
+      
+      // Animate gradient shimmer
+      gradientPosition.value = withRepeat(
+        withTiming(1, { duration: 2000 }),
+        -1, // infinite repeat
+        true // yoyo: go back and forth
+      );
     } else {
-      opacity.value = withTiming(0, { duration: 200 });
+      opacity.value = withTiming(0, { duration: 300 });
       translateY.value = withSpring(300, SPRING_CONFIG);
-      scale.value = withSpring(0.8, SPRING_CONFIG);
+      scale.value = withSpring(0.95, SPRING_CONFIG);
     }
   }, [isVisible]);
 
-  // Pan gesture for card dismissal with improved physics
+  // Pan gesture with 3D rotation effect for premium feel
   const panGesture = Gesture.Pan()
     .onUpdate((e) => {
       if (e.translationY > 0) {
-        translateY.value = e.translationY;
+        translateY.value = e.translationY * 0.6; // Dampen movement for better feel
         
         // Reduce opacity and scale as dragged down
         opacity.value = interpolate(
           e.translationY,
           [0, 300],
-          [1, 0.5],
+          [1, 0.7],
           Extrapolate.CLAMP
         );
         
         scale.value = interpolate(
           e.translationY,
           [0, 300],
-          [1, 0.85],
+          [1, 0.95],
           Extrapolate.CLAMP
         );
         
-        // Add slight rotation based on horizontal movement
-        rotation.value = interpolate(
+        // Add 3D rotation based on horizontal movement
+        cardRotation.value = interpolate(
           e.translationX,
-          [-100, 100],
-          [-0.05, 0.05],
+          [-150, 150],
+          [-0.03, 0.03],
           Extrapolate.CLAMP
         );
       }
@@ -459,48 +526,65 @@ const BusinessCardModal: React.FC<BusinessCardModalProps> = ({
       const velocity = e.velocityY;
       
       if (velocity > 500 || e.translationY > 100) {
-        // User dragged down enough or swiped quickly - close the modal
+        // User dragged down enough or swiped quickly - close
         opacity.value = withTiming(0, { duration: 200 });
-        translateY.value = withSpring(300, {
+        translateY.value = withSpring(500, {
           ...SPRING_CONFIG,
-          velocity: velocity,
+          velocity: velocity * 0.3,
         }, () => {
           runOnJS(onClose)();
         });
-        scale.value = withSpring(0.8, SPRING_CONFIG);
+        scale.value = withSpring(0.9, SPRING_CONFIG);
       } else {
-        // Snap back to open position
+        // Snap back with elegant animation
         translateY.value = withSpring(0, {
           ...SPRING_CONFIG,
-          velocity: velocity,
+          stiffness: 200,
+          damping: 20,
+          velocity: velocity * 0.3,
         });
-        scale.value = withSpring(1, SPRING_CONFIG);
+        scale.value = withSpring(1, {
+          ...SPRING_CONFIG,
+          stiffness: 200,
+        });
         opacity.value = withTiming(1, { duration: 150 });
-        rotation.value = withSpring(0);
+        cardRotation.value = withTiming(0, { duration: 250 });
       }
     });
 
   // Animated styles
   const backdropStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value * 0.9, // Darker backdrop for better visibility
+    opacity: opacity.value * 0.85,
   }));
 
   const cardStyle = useAnimatedStyle(() => ({
     transform: [
       { translateY: translateY.value },
       { scale: scale.value },
-      { rotate: `${rotation.value}rad` }
+      { perspective: 1000 },
+      { rotateX: `${cardRotation.value}rad` }
     ],
     opacity: opacity.value,
   }));
+  
+  const shimmerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: interpolate(
+      gradientPosition.value,
+      [0, 1],
+      [-200, 200]
+    )}],
+  }));
 
-  const handleShare = () => {
-    // Implement share functionality
+  const handleShare = async () => {
+    try {
+      // In a real implementation, generate a link to the user's profile
+      const message = `Check out my professional profile: ${profile?.full_name} - ${profile?.specialty || "Medical Professional"}`;
+      await Linking.openURL(`mailto:?subject=Professional Profile&body=${encodeURIComponent(message)}`);
+    } catch (error) {
+      console.error('Error sharing profile:', error);
+    }
   };
   
-  // Determine if the card should show placeholder or real data
-  const hasFullProfile = profile?.full_name && profile?.specialty;
-
   return (
     <Modal
       transparent
@@ -509,49 +593,67 @@ const BusinessCardModal: React.FC<BusinessCardModalProps> = ({
       onRequestClose={onClose}
       statusBarTranslucent={true}
     >
-      <Animated.View style={[styles.modalBackdrop, backdropStyle]}>
-        <TouchableOpacity 
-          style={StyleSheet.absoluteFill}
-          activeOpacity={1}
-          onPress={onClose}
-        />
+      <View style={styles.modalContainer}>
+        <Animated.View style={[styles.modalBackdrop, backdropStyle]}>
+          <TouchableOpacity 
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={onClose}
+          />
+        </Animated.View>
         
         <GestureHandlerRootView style={styles.gestureContainer}>
           <GestureDetector gesture={panGesture}>
             <Animated.View style={[styles.businessCard, cardStyle]}>
               <View style={styles.cardShadowWrapper}>
+                {/* Premium shimmer effect overlay */}
+                <Animated.View style={[StyleSheet.absoluteFill, styles.shimmerContainer, shimmerStyle]}>
+                  <LinearGradient
+                    colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.3)', 'rgba(255,255,255,0)']}
+                    start={{ x: 0, y: 0.5 }}
+                    end={{ x: 1, y: 0.5 }}
+                    style={styles.shimmerGradient}
+                  />
+                </Animated.View>
+              
                 <View style={styles.cardContainer}>
-                  {/* Top handle */}
-                  <View style={styles.cardHandle} />
+                  {/* Premium card handle */}
+                  <View style={styles.cardHandleContainer}>
+                    <View style={styles.cardHandle} />
+                  </View>
                   
-                  {/* Card header */}
+                  {/* Header Section */}
                   <View style={styles.cardHeader}>
-                    <Text style={styles.cardTitle}>Digital Business Card</Text>
+                    <View>
+                      <View style={styles.brandRow}>
+                        <Sparkles size={16} color="#0066CC" />
+                        <Text style={styles.brandText}>Digital Business Card</Text>
+                      </View>
+                    </View>
                     <TouchableOpacity 
-                      onPress={handleShare} 
-                      style={styles.shareButton}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      onPress={onClose} 
+                      style={styles.closeCardButton}
                     >
-                      <Share2 size={20} color="#0066CC" />
+                      <X size={18} color="#666666" />
                     </TouchableOpacity>
                   </View>
                   
-                  {/* Main content */}
-                  <View style={styles.cardContent}>
-                    {/* Profile section */}
-                    <View style={styles.profileSection}>
-                      <LinearGradient
-                        colors={['#0066CC', '#0091FF']}
-                        style={styles.profileBanner}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                      >
-                        <View style={styles.profileBannerContent}>
-                          <View style={styles.cardAvatarContainer}>
+                  {/* Professional header with gradient */}
+                  <View style={styles.cardBannerContainer}>
+                    <LinearGradient
+                      colors={['#0047AB', '#0066CC', '#1E90FF']}
+                      style={styles.cardBanner}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      {/* Avatar with elegant border */}
+                      <View style={styles.cardAvatarOuterRing}>
+                        <View style={styles.cardAvatarRing}>
+                          <View style={styles.cardAvatarWrapper}>
                             {profile?.avatar_url ? (
                               <Image 
                                 source={{ uri: profile.avatar_url }} 
-                                style={styles.cardAvatar} 
+                                style={styles.cardAvatarImage} 
                               />
                             ) : (
                               <View style={styles.cardAvatarPlaceholder}>
@@ -559,83 +661,89 @@ const BusinessCardModal: React.FC<BusinessCardModalProps> = ({
                               </View>
                             )}
                           </View>
-                          
-                          <View style={styles.cardInfo}>
-                            <Text style={styles.cardName}>
-                              {profile?.full_name || "Your Name"}
-                            </Text>
-                            <Text style={styles.cardSpecialty}>
-                              {profile?.specialty || "Healthcare Professional"}
-                            </Text>
-                          </View>
-                        </View>
-                      </LinearGradient>
-                      
-                      {/* Stats row */}
-                      <View style={styles.businessCardStats}>
-                        <View style={styles.cardStatItem}>
-                          <Text style={styles.cardStatValue}>
-                            {profile?.years_experience || "5+"}
-                          </Text>
-                          <Text style={styles.cardStatLabel}>Years Exp</Text>
-                        </View>
-                        <View style={styles.statDivider} />
-                        <View style={styles.cardStatItem}>
-                          <Text style={styles.cardStatValue}>
-                            {profile?.rating || "4.9"}
-                          </Text>
-                          <Text style={styles.cardStatLabel}>Rating</Text>
-                        </View>
-                        <View style={styles.statDivider} />
-                        <View style={styles.cardStatItem}>
-                          <Text style={styles.cardStatValue}>
-                            {profile?.patients_count || "120+"}
-                          </Text>
-                          <Text style={styles.cardStatLabel}>Patients</Text>
                         </View>
                       </View>
-                    </View>
-                    
-                    {/* Details section */}
-                    <View style={styles.detailsSection}>
-                      {profile?.hospital && (
-                        <View style={styles.detailRow}>
-                          <View style={styles.detailIconContainer}>
-                            <Briefcase size={18} color="#0066CC" />
-                          </View>
-                          <Text style={styles.detailText}>{profile.hospital}</Text>
+                      
+                      <Text style={styles.cardNameText}>
+                        {profile?.full_name || "Your Name"}
+                      </Text>
+                      
+                      {profile?.specialty && (
+                        <View style={styles.cardSpecialtyBadge}>
+                          <Stethoscope size={14} color="#FFFFFF" />
+                          <Text style={styles.cardSpecialtyText}>
+                            {profile.specialty}
+                          </Text>
                         </View>
                       )}
-                      
-                      <TouchableOpacity style={styles.viewProfileButton}>
-                        <Text style={styles.viewProfileText}>View Full Profile</Text>
-                        <ChevronRight size={18} color="#0066CC" />
-                      </TouchableOpacity>
-                    </View>
-                    
-                    {/* QR code section */}
-                    <View style={styles.qrSection}>
-                      <View style={styles.qrContainer}>
-                        <QrCode size={120} color="#000000" />
-                        <Text style={styles.qrText}>
-                          Scan to connect instantly
-                        </Text>
-                      </View>
-                    </View>
+                    </LinearGradient>
                   </View>
                   
-                  {/* Card footer */}
-                  <View style={styles.cardFooter}>
-                    <TouchableOpacity style={styles.footerButton}>
-                      <Text style={styles.footerButtonText}>Connect</Text>
-                    </TouchableOpacity>
+                  {/* Professional information section - condensed */}
+                  <View style={styles.cardInfoSection}>
+                    <Text style={styles.sectionLabel}>PROFESSIONAL DETAILS</Text>
+                    
+                    {profile?.hospital && (
+                      <View style={styles.cardInfoRow}>
+                        <View style={styles.cardInfoIconContainer}>
+                          <Briefcase size={16} color="#0066CC" />
+                        </View>
+                        <Text style={styles.cardInfoText}>{profile.hospital}</Text>
+                      </View>
+                    )}
+                    
+                    {profile?.location && (
+                      <View style={styles.cardInfoRow}>
+                        <View style={styles.cardInfoIconContainer}>
+                          <MapPin size={16} color="#0066CC" />
+                        </View>
+                        <Text style={styles.cardInfoText}>{profile.location}</Text>
+                      </View>
+                    )}
+                    
+                    {/* Specialty is already shown in the header - only include if not shown there */}
+                    {!profile?.specialty && (
+                      <View style={styles.cardInfoRow}>
+                        <View style={styles.cardInfoIconContainer}>
+                          <Stethoscope size={16} color="#0066CC" />
+                        </View>
+                        <Text style={styles.cardInfoText}>Medical Professional</Text>
+                      </View>
+                    )}
                   </View>
+                  
+                  {/* QR Code section - simplified */}
+                  <View style={styles.qrCodeSection}>
+                    <View style={styles.qrCodeTopRow}>
+                      <Text style={styles.qrCodeTitle}>Connect</Text>
+                      <View style={styles.qrCodeDivider} />
+                    </View>
+                    
+                    <View style={styles.qrCodeBorder}>
+                      <View style={styles.qrCodeContainer}>
+                        <QrCode size={120} color="#000000" />
+                      </View>
+                    </View>
+                    
+                    <Text style={styles.qrCodeDescription}>
+                      Scan to connect with my professional profile
+                    </Text>
+                  </View>
+                  
+                  {/* Action buttons - share only */}
+                  <TouchableOpacity 
+                    style={styles.singleActionButton} 
+                    onPress={handleShare}
+                  >
+                    <Share2 size={18} color="#FFFFFF" />
+                    <Text style={styles.cardActionText}>Share Profile</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             </Animated.View>
           </GestureDetector>
         </GestureHandlerRootView>
-      </Animated.View>
+      </View>
     </Modal>
   );
 };
@@ -792,13 +900,21 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 4,
+    marginBottom: 6,
     fontFamily: 'Inter_600SemiBold',
+  },
+  specialtyContainer: {
+    backgroundColor: 'rgba(0, 102, 204, 0.1)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    alignSelf: 'flex-start',
   },
   profileSpecialty: {
     fontSize: 16,
     color: '#0066CC',
-    fontFamily: 'Inter_500Medium',
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
   },
   menuScrollView: {
     flex: 1,
@@ -842,11 +958,105 @@ const styles = StyleSheet.create({
     color: '#999',
     fontFamily: 'Inter_400Regular',
   },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+  infoSectionContainer: {
+    marginBottom: 20,
+    paddingHorizontal: 16,
+  },
+  infoCard: {
+    marginBottom: 12,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  infoCardGradient: {
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  infoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  infoItemText: {
+    fontSize: 15,
+    color: '#333',
+    fontWeight: '500',
+    fontFamily: 'Inter_500Medium',
+    marginLeft: 8,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 8,
+    fontFamily: 'Inter_700Bold',
+  },
+  bioContainer: {
+    marginTop: 16,
+    marginBottom: 20,
+  },
+  bioCardContainer: {
+    backgroundColor: 'rgba(0, 102, 204, 0.05)',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 102, 204, 0.1)',
+  },
+  bioText: {
+    fontSize: 15,
+    color: '#333',
+    lineHeight: 22,
+    fontFamily: 'Inter_400Regular',
+  },
+  expertiseContainer: {
+    marginBottom: 20,
+  },
+  expertiseTagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 6,
+  },
+  expertiseTag: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    marginRight: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 102, 204, 0.1)',
+  },
+  expertiseTagText: {
+    fontSize: 14,
+    color: '#0066CC',
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+  },
+  specialtyHighlightContainer: {
+    marginBottom: 20,
+    paddingHorizontal: 16,
+  },
+  specialtyHighlightGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 102, 204, 0.2)',
+  },
+  specialtyHighlightText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0066CC',
+    marginLeft: 12,
+    fontFamily: 'Inter_700Bold',
+  },
+  modalContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(18, 25, 38, 0.9)',
   },
   gestureContainer: {
     width: '100%',
@@ -854,79 +1064,108 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   businessCard: {
-    width: SCREEN_WIDTH * 0.9,
+    width: SCREEN_WIDTH * 0.88,
+    maxHeight: SCREEN_HEIGHT * 0.85,
     borderRadius: 24,
     overflow: 'hidden',
   },
   cardShadowWrapper: {
     borderRadius: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    elevation: 15,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 24,
     backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  shimmerContainer: {
+    overflow: 'hidden',
+    zIndex: 10,
+  },
+  shimmerGradient: {
+    width: 400,
+    height: '100%',
+    position: 'absolute',
   },
   cardContainer: {
     borderRadius: 24,
     overflow: 'hidden',
-    paddingBottom: 20,
     backgroundColor: '#FFFFFF',
   },
+  cardHandleContainer: {
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(247, 249, 252, 0.8)',
+  },
   cardHandle: {
-    width: 40,
+    width: 36,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: '#DDD',
-    alignSelf: 'center',
-    marginTop: 14,
-    marginBottom: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    marginBottom: 20,
-    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(247, 249, 252, 0.8)',
   },
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#333',
-    fontFamily: 'Inter_700Bold',
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  shareButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: 'rgba(0, 102, 204, 0.1)',
+  brandText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#0066CC',
+    fontFamily: 'Inter_500Medium',
+  },
+  closeCardButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardContent: {
-    backgroundColor: '#FFFFFF',
+  cardBannerContainer: {
+    overflow: 'hidden',
   },
-  profileSection: {
-    marginBottom: 20,
-  },
-  profileBanner: {
+  cardBanner: {
     width: '100%',
-    paddingVertical: 24,
-    paddingHorizontal: 24,
-  },
-  profileBannerContent: {
-    flexDirection: 'row',
+    paddingTop: 25,
+    paddingBottom: 25,
     alignItems: 'center',
   },
-  cardAvatarContainer: {
+  cardAvatarOuterRing: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardAvatarRing: {
+    width: 98,
+    height: 98,
+    borderRadius: 49,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardAvatarWrapper: {
     width: 86,
     height: 86,
     borderRadius: 43,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     padding: 3,
+    marginBottom: 0,
   },
-  cardAvatar: {
+  cardAvatarImage: {
     width: 80,
     height: 80,
     borderRadius: 40,
@@ -937,155 +1176,136 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#FFFFFF',
   },
-  cardInfo: {
-    flex: 1,
-    marginLeft: 16,
-  },
-  cardName: {
-    fontSize: 26,
+  cardNameText: {
+    fontSize: 24,
     fontWeight: '700',
     color: '#FFFFFF',
-    marginBottom: 5,
     fontFamily: 'Inter_700Bold',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
   },
-  cardSpecialty: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#FFFFFF',
-    opacity: 0.95,
-    fontFamily: 'Inter_500Medium',
-  },
-  businessCardStats: {
-    flexDirection: 'row',
-    width: '100%',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#0066CC',
-  },
-  cardStatItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  cardStatValue: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 4,
-    fontFamily: 'Inter_700Bold',
-  },
-  cardStatLabel: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontFamily: 'Inter_500Medium',
-  },
-  statDivider: {
-    width: 1,
-    height: 36,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  detailsSection: {
-    paddingHorizontal: 24,
-    marginBottom: 20,
-    backgroundColor: '#FFFFFF',
-  },
-  detailRow: {
+  cardSpecialtyBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
-    backgroundColor: '#F8F9FF',
-    padding: 14,
-    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(0, 102, 204, 0.12)',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    gap: 6,
   },
-  detailIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 102, 204, 0.1)',
+  cardSpecialtyText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    fontFamily: 'Inter_600SemiBold',
+  },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#999999',
+    marginBottom: 12,
+    letterSpacing: 1,
+    fontFamily: 'Inter_700Bold',
+  },
+  cardInfoSection: {
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.06)',
+  },
+  cardInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  cardInfoIconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0, 102, 204, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
-  detailText: {
-    fontSize: 16,
-    color: '#333',
+  cardInfoText: {
+    fontSize: 14,
+    color: '#333333',
     fontWeight: '500',
     fontFamily: 'Inter_500Medium',
-    flex: 1,
   },
-  viewProfileButton: {
+  qrCodeSection: {
+    padding: 20,
+    alignItems: 'center',
+    paddingBottom: 10,
+  },
+  qrCodeTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 20,
+  },
+  qrCodeTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333333',
+    fontFamily: 'Inter_600SemiBold',
+    marginRight: 12,
+  },
+  qrCodeDivider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.08)',
+  },
+  qrCodeBorder: {
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: '#F7F9FC',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
+  },
+  qrCodeContainer: {
+    padding: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+  },
+  qrCodeDescription: {
+    fontSize: 13,
+    color: '#666666',
+    fontFamily: 'Inter_400Regular',
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  singleActionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
-    backgroundColor: '#F8F9FF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 102, 204, 0.12)',
-  },
-  viewProfileText: {
-    fontSize: 16,
-    color: '#0066CC',
-    fontWeight: '600',
-    marginRight: 8,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  qrSection: {
-    alignItems: 'center',
-    marginBottom: 20,
-    paddingHorizontal: 24,
-    backgroundColor: '#FFFFFF',
-  },
-  qrContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 20,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.08)',
-    width: '100%',
-  },
-  qrText: {
-    marginTop: 14,
-    fontSize: 14,
-    color: '#666',
-    fontFamily: 'Inter_500Medium',
-    textAlign: 'center',
-  },
-  cardFooter: {
-    paddingHorizontal: 24,
-    backgroundColor: '#FFFFFF',
-  },
-  footerButton: {
     backgroundColor: '#0066CC',
-    paddingVertical: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginHorizontal: 24,
+    marginVertical: 16,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
     shadowColor: '#0066CC',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+    gap: 8,
   },
-  footerButtonText: {
-    color: '#FFFFFF',
-    fontSize: 18,
+  cardActionText: {
+    fontSize: 15,
     fontWeight: '600',
+    color: '#FFFFFF',
     fontFamily: 'Inter_600SemiBold',
   },
 });

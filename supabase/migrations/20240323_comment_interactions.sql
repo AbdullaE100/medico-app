@@ -113,6 +113,20 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Create function to increment post comments count
+CREATE OR REPLACE FUNCTION increment_post_comments_count(p_post_id UUID)
+RETURNS void AS $$
+BEGIN
+  UPDATE posts
+  SET comments_count = (
+    SELECT COUNT(*) 
+    FROM post_comments 
+    WHERE post_id = p_post_id
+  )
+  WHERE id = p_post_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- Create RLS policies for comment interactions
 ALTER TABLE comment_likes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE comment_reposts ENABLE ROW LEVEL SECURITY;
