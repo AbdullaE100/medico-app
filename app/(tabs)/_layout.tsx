@@ -174,15 +174,6 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
-          name="discussions"
-          options={{
-            title: 'Forum',
-            tabBarIcon: ({ color, size }) => <Newspaper size={size} color={color} />,
-            // Make the forum tab visible
-            tabBarItemStyle: undefined,
-          }}
-        />
-        <Tabs.Screen
           name="create"
           options={{
             title: 'Create',
@@ -193,10 +184,19 @@ export default function TabLayout() {
                   colors={['#0066CC', '#1a82ff']}
                   style={styles.createIconGradient}
                 >
-                  <Plus size={size-2} color="#FFFFFF" />
+                  <Plus size={size-5} color="#FFFFFF" />
                 </LinearGradient>
               </View>
             ),
+          }}
+        />
+        <Tabs.Screen
+          name="discussions"
+          options={{
+            title: 'Forum',
+            tabBarIcon: ({ color, size }) => <Newspaper size={size} color={color} />,
+            // Make the forum tab visible
+            tabBarItemStyle: undefined,
           }}
         />
         <Tabs.Screen
@@ -264,23 +264,23 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
   },
   createTabIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Platform.OS === 'ios' ? 16 : 0,
   },
   createIconGradient: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#0066CC',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 5,
   }
 });

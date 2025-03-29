@@ -1,46 +1,53 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
   StyleSheet,
+  TextInput,
   TouchableOpacity,
   ScrollView,
-  Image,
-  Platform,
-  Keyboard,
   KeyboardAvoidingView,
-  ActivityIndicator,
+  Platform,
   Alert,
-  Dimensions,
-  Animated,
+  Keyboard,
+  Image,
   StatusBar,
-  SafeAreaView
+  SafeAreaView,
+  ActivityIndicator,
+  Dimensions
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import {
-  Image as ImageIcon,
-  Camera,
-  Hash,
-  X,
-  ArrowLeft,
-  Globe,
-  Users,
-  Plus,
-  Smile,
-  MapPin,
-  AtSign,
-  Tag
+import { 
+  ArrowLeft, 
+  Image as ImageIcon, 
+  Camera, 
+  Smile, 
+  MapPin, 
+  Tag, 
+  Hash, 
+  AtSign, 
+  X, 
+  Users, 
+  Globe, 
+  Plus 
 } from 'lucide-react-native';
-import * as ImagePicker from 'expo-image-picker';
-import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
 import { useFeedStore } from '@/stores/useFeedStore';
-import { supabase } from '@/lib/supabase';
+import * as ImagePicker from 'expo-image-picker';
 import { v4 as uuidv4 } from 'uuid';
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withTiming, 
+  withSpring, 
+  Easing 
+} from 'react-native-reanimated';
+import { supabase } from '@/lib/supabase';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 
-const MAX_IMAGES = 4;
-const MAX_HASHTAGS = 5;
+// Constants
 const CHAR_LIMIT = 500;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function CreatePostScreen() {
   const router = useRouter();
@@ -60,9 +67,10 @@ export default function CreatePostScreen() {
   const [showMentionPanel, setShowMentionPanel] = useState(false);
   const [cursorPosition, setCursorPosition] = useState(0);
   
-  // Animations
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
+  // Animated values
+  const fadeAnim = useSharedValue(0);
+  const slideAnim = useSharedValue(30);
+  const scaleAnim = useSharedValue(0.95);
   const textInputRef = useRef<TextInput>(null);
   
   // Keyboard listeners
@@ -88,41 +96,55 @@ export default function CreatePostScreen() {
   
   // Animation effect
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    fadeAnim.value = withTiming(1, { duration: 500, easing: Easing.out(Easing.cubic) });
+    slideAnim.value = withTiming(0, { duration: 500, easing: Easing.out(Easing.cubic) });
+    scaleAnim.value = withSpring(1, { damping: 15, stiffness: 120 });
   }, []);
   
-  // Handle content change with hashtag parsing
+  const headerAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: fadeAnim.value,
+      transform: [{ translateY: slideAnim.value }]
+    };
+  });
+  
+  const contentAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: fadeAnim.value,
+      transform: [{ translateY: slideAnim.value }, { scale: scaleAnim.value }]
+    };
+  });
+  
+  const toolbarAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: fadeAnim.value,
+      transform: [{ translateY: slideAnim.value * -0.5 }]
+    };
+  });
+
+  // Handle content changes and mention detection
   const handleContentChange = (text: string) => {
     setContent(text);
     
-    // Check for mentions
-    const matches = text.match(/@\w+/g);
-    if (matches && matches.length > 0) {
-      const lastMention = matches[matches.length - 1];
-      setMentionText(lastMention.substring(1));
-      searchMentions(lastMention.substring(1));
+    // Check for mention pattern
+    const lastAtSymbolIndex = text.lastIndexOf('@');
+    if (lastAtSymbolIndex >= 0 && lastAtSymbolIndex < cursorPosition) {
+      const query = text.substring(lastAtSymbolIndex + 1, cursorPosition).trim();
+      if (query) {
+        setMentionText(query);
+        searchMentions(query);
+        setShowMentionPanel(true);
+      } else {
+        setShowMentionPanel(false);
+      }
     } else {
       setShowMentionPanel(false);
     }
   };
   
-  // Search for mentions
+  // Search for user mentions
   const searchMentions = async (query: string) => {
-    if (query.length < 2) {
-      setShowMentionPanel(false);
-      return;
-    }
+    if (query.length < 2) return;
     
     try {
       const { data, error } = await supabase
@@ -130,111 +152,100 @@ export default function CreatePostScreen() {
         .select('id, full_name, avatar_url')
         .ilike('full_name', `%${query}%`)
         .limit(5);
-        
+      
       if (error) throw error;
       
-      if (data && data.length > 0) {
-        setMentionData(data);
-        setShowMentionPanel(true);
-      } else {
-        setShowMentionPanel(false);
-      }
+      setMentionData(data || []);
     } catch (error) {
       console.error('Error searching mentions:', error);
-      setShowMentionPanel(false);
+      setMentionData([]);
     }
   };
   
-  // Select a mention
+  // Handle mention selection
   const selectMention = (profile: any) => {
-    const beforeMention = content.substring(0, content.lastIndexOf('@'));
-    const afterMention = content.substring(content.lastIndexOf('@') + mentionText.length + 1);
-    const newContent = `${beforeMention}@${profile.full_name} ${afterMention}`;
-    setContent(newContent);
+    const textBefore = content.substring(0, content.lastIndexOf('@'));
+    const textAfter = content.substring(cursorPosition);
+    const newText = `${textBefore}@${profile.full_name} ${textAfter}`;
+    
+    setContent(newText);
     setShowMentionPanel(false);
     
-    // Trigger haptic feedback
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Focus back on the text input after selection
+    setTimeout(() => {
+      textInputRef.current?.focus();
+    }, 100);
   };
   
   // Handle hashtag input
   const handleHashtagChange = (text: string) => {
-    // Remove # prefix and spaces
-    const cleanText = text.replace(/^#/, '').trim();
-    setCurrentHashtag(cleanText);
+    // Remove # if user types it
+    setCurrentHashtag(text.replace(/^#/, ''));
   };
   
-  // Add a hashtag
+  // Add hashtag
   const addHashtag = () => {
-    if (
-      currentHashtag.trim() !== '' && 
-      !hashtags.includes(currentHashtag.toLowerCase()) && 
-      hashtags.length < MAX_HASHTAGS
-    ) {
-      setHashtags([...hashtags, currentHashtag.toLowerCase()]);
-      setCurrentHashtag('');
-      
-      // Trigger haptic feedback
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const tag = currentHashtag.trim().toLowerCase();
+    
+    if (tag && !hashtags.includes(tag)) {
+      if (hashtags.length < 5) {
+        // Add haptic feedback
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        setHashtags([...hashtags, tag]);
+        setCurrentHashtag('');
+      } else {
+        Alert.alert('Limit Reached', 'You can add a maximum of 5 hashtags.');
+      }
     }
   };
   
-  // Remove a hashtag
+  // Remove hashtag
   const removeHashtag = (tag: string) => {
+    // Add haptic feedback
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setHashtags(hashtags.filter(t => t !== tag));
-    
-    // Trigger haptic feedback
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
   
   // Pick image from library
   const pickImage = async () => {
-    if (images.length >= MAX_IMAGES) {
-      Alert.alert('Limit Reached', `You can only add up to ${MAX_IMAGES} images.`);
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    
+    if (!permissionResult.granted) {
+      Alert.alert(
+        'Permission Required',
+        'Please grant access to your photo library to add images to your post.',
+        [{ text: 'OK' }]
+      );
       return;
     }
     
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-      });
-      
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setImages([...images, result.assets[0].uri]);
-        
-        // Trigger haptic feedback
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
-    } catch (error) {
-      console.error('Error picking image:', error);
-      Alert.alert('Error', 'There was a problem selecting your image. Please try again.');
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+    
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      // Add haptic feedback
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setImages([...images, result.assets[0].uri]);
     }
   };
   
-  // Remove an image
+  // Remove image
   const removeImage = (index: number) => {
-    const newImages = [...images];
-    newImages.splice(index, 1);
-    setImages(newImages);
-    
-    // Trigger haptic feedback
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // Add haptic feedback
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const updatedImages = [...images];
+    updatedImages.splice(index, 1);
+    setImages(updatedImages);
   };
   
-  // Validate post content
+  // Validate post before submission
   const validatePost = (): boolean => {
-    if (content.trim() === '') {
-      return false;
-    }
-    
-    if (content.length > CHAR_LIMIT) {
-      return false;
-    }
-    
-    return true;
+    const trimmedContent = content.trim();
+    return trimmedContent.length > 0 && trimmedContent.length <= CHAR_LIMIT;
   };
   
   // Handle post submission
@@ -354,237 +365,255 @@ export default function CreatePostScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.container}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      <LinearGradient
+        colors={['#f9f9f9', '#ffffff']}
+        style={styles.gradientBackground}
       >
-        <Animated.View 
-          style={[
-            styles.header,
-            { 
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }] 
-            }
-          ]}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.container}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
         >
-          <TouchableOpacity 
-            style={styles.headerButton} 
-            onPress={handleCancel}
-          >
-            <ArrowLeft size={24} color="#333" />
-          </TouchableOpacity>
-          
-          <Text style={styles.headerTitle}>Create Post</Text>
-          
-          <TouchableOpacity
-            style={[
-              styles.postButton,
-              { opacity: validatePost() ? 1 : 0.5 }
-            ]}
-            onPress={handlePostSubmit}
-            disabled={isPosting || !validatePost()}
-          >
-            {isPosting ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Text style={styles.postButtonText}>Post</Text>
-            )}
-          </TouchableOpacity>
-        </Animated.View>
-      
-        <ScrollView
-          style={styles.scrollView}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <Animated.View 
-            style={[
-              styles.contentContainer,
-              { 
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }] 
-              }
-            ]}
-          >
-            <View style={styles.privacySelector}>
-              <TouchableOpacity
-                style={[
-                  styles.privacyOption,
-                  isPublic && styles.privacyOptionSelected
-                ]}
-                onPress={() => setIsPublic(true)}
-              >
-                <Globe size={16} color={isPublic ? '#0066CC' : '#666'} />
-                <Text 
-                  style={[
-                    styles.privacyText,
-                    isPublic && styles.privacyTextSelected
-                  ]}
-                >
-                  Public
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[
-                  styles.privacyOption,
-                  !isPublic && styles.privacyOptionSelected
-                ]}
-                onPress={() => setIsPublic(false)}
-              >
-                <Users size={16} color={!isPublic ? '#0066CC' : '#666'} />
-                <Text 
-                  style={[
-                    styles.privacyText,
-                    !isPublic && styles.privacyTextSelected
-                  ]}
-                >
-                  Followers
-                </Text>
-              </TouchableOpacity>
-            </View>
-          
-            <View style={styles.textInputContainer}>
-              <TextInput
-                ref={textInputRef}
-                style={[
-                  styles.contentInput,
-                  { height: Math.max(120, textHeight) }
-                ]}
-                placeholder="What's on your mind? Share medical insights or ask questions..."
-                placeholderTextColor="#999"
-                multiline
-                value={content}
-                onChangeText={handleContentChange}
-                onContentSizeChange={(e) => setTextHeight(e.nativeEvent.contentSize.height)}
-                onSelectionChange={(e) => setCursorPosition(e.nativeEvent.selection.start)}
-                autoFocus
-                maxLength={CHAR_LIMIT + 50} // Give a little buffer before hard cutoff
-              />
-              
-              <Text style={styles.charCounter}>
-                {content.length}/{CHAR_LIMIT}
-              </Text>
-            </View>
+          <Animated.View style={[styles.header, headerAnimatedStyle]}>
+            <TouchableOpacity 
+              style={styles.headerButton} 
+              onPress={handleCancel}
+            >
+              <ArrowLeft size={22} color="#333" />
+            </TouchableOpacity>
             
-            {showMentionPanel && (
-              <View style={styles.mentionContainer}>
-                {mentionData.map((profile) => (
-                  <TouchableOpacity
-                    key={profile.id}
-                    style={styles.mentionItem}
-                    onPress={() => selectMention(profile)}
+            <Text style={styles.headerTitle}>Create Post</Text>
+            
+            <TouchableOpacity
+              style={[
+                styles.postButton,
+                { opacity: validatePost() ? 1 : 0.7 }
+              ]}
+              onPress={handlePostSubmit}
+              disabled={isPosting || !validatePost()}
+            >
+              {isPosting ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.postButtonText}>Post</Text>
+              )}
+            </TouchableOpacity>
+          </Animated.View>
+        
+          <ScrollView
+            style={styles.scrollView}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollViewContent}
+          >
+            <Animated.View style={[styles.contentContainer, contentAnimatedStyle]}>
+              <View style={styles.privacySelector}>
+                <TouchableOpacity
+                  style={[
+                    styles.privacyOption,
+                    isPublic && styles.privacyOptionSelected
+                  ]}
+                  onPress={() => setIsPublic(true)}
+                >
+                  <Globe size={16} color={isPublic ? '#0066CC' : '#666'} />
+                  <Text 
+                    style={[
+                      styles.privacyText,
+                      isPublic && styles.privacyTextSelected
+                    ]}
                   >
-                    {profile.avatar_url ? (
-                      <Image 
-                        source={{ uri: profile.avatar_url }} 
-                        style={styles.mentionAvatar} 
-                      />
-                    ) : (
-                      <View style={styles.mentionAvatarPlaceholder}>
-                        <AtSign size={14} color="#666" />
-                      </View>
-                    )}
-                    <Text style={styles.mentionName}>{profile.full_name}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-            
-            {images.length > 0 && (
-              <ScrollView 
-                horizontal 
-                style={styles.imagePreviewScroll}
-                showsHorizontalScrollIndicator={false}
-              >
-                {images.map((uri, index) => (
-                  <View key={index} style={styles.imagePreviewContainer}>
-                    <Image source={{ uri }} style={styles.imagePreview} />
-                    <TouchableOpacity
-                      style={styles.removeImageButton}
-                      onPress={() => removeImage(index)}
-                    >
-                      <X size={16} color="#FFF" />
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </ScrollView>
-            )}
-            
-            <View style={styles.hashtagSection}>
-              <View style={styles.hashtagInputContainer}>
-                <Hash size={18} color="#0066CC" />
-                <TextInput
-                  style={styles.hashtagInput}
-                  placeholder="Add hashtags (max 5)"
-                  placeholderTextColor="#999"
-                  value={currentHashtag}
-                  onChangeText={handleHashtagChange}
-                  onSubmitEditing={addHashtag}
-                  maxLength={20}
-                />
-                <TouchableOpacity 
+                    Public
+                  </Text>
+                </TouchableOpacity>
+                
+                <View style={styles.privacyDivider}></View>
+                
+                <TouchableOpacity
                   style={[
-                    styles.addHashtagButton,
-                    { opacity: currentHashtag.trim() !== '' ? 1 : 0.5 }
+                    styles.privacyOption,
+                    !isPublic && styles.privacyOptionSelected
                   ]}
-                  onPress={addHashtag}
-                  disabled={currentHashtag.trim() === ''}
+                  onPress={() => setIsPublic(false)}
                 >
-                  <Plus size={18} color="#FFF" />
+                  <Users size={16} color={!isPublic ? '#0066CC' : '#666'} />
+                  <Text 
+                    style={[
+                      styles.privacyText,
+                      !isPublic && styles.privacyTextSelected
+                    ]}
+                  >
+                    Followers
+                  </Text>
                 </TouchableOpacity>
               </View>
+            
+              <View style={styles.textInputContainer}>
+                <LinearGradient
+                  colors={['#fcfcfc', '#ffffff']}
+                  style={styles.inputGradient}
+                >
+                  <TextInput
+                    ref={textInputRef}
+                    style={[
+                      styles.contentInput,
+                      { height: Math.max(120, textHeight) }
+                    ]}
+                    placeholder="What's on your mind? Share medical insights or ask questions..."
+                    placeholderTextColor="#aaaaaa"
+                    multiline
+                    value={content}
+                    onChangeText={handleContentChange}
+                    onContentSizeChange={(e) => setTextHeight(e.nativeEvent.contentSize.height)}
+                    onSelectionChange={(e) => setCursorPosition(e.nativeEvent.selection.start)}
+                    autoFocus
+                    maxLength={CHAR_LIMIT + 50} // Give a little buffer before hard cutoff
+                  />
+                </LinearGradient>
+                
+                <Text style={[
+                  styles.charCounter, 
+                  content.length > CHAR_LIMIT * 0.9 && styles.charCounterWarning,
+                  content.length > CHAR_LIMIT && styles.charCounterError
+                ]}>
+                  {content.length}/{CHAR_LIMIT}
+                </Text>
+              </View>
               
-              {hashtags.length > 0 && (
-                <View style={styles.hashtagChipsContainer}>
-                  {hashtags.map((tag) => (
-                    <View key={tag} style={styles.hashtagChip}>
-                      <Text style={styles.hashtagChipText}>#{tag}</Text>
-                      <TouchableOpacity
-                        style={styles.removeHashtagButton}
-                        onPress={() => removeHashtag(tag)}
-                      >
-                        <X size={12} color="#0066CC" />
-                      </TouchableOpacity>
-                    </View>
+              {showMentionPanel && (
+                <View style={styles.mentionContainer}>
+                  {mentionData.map((profile) => (
+                    <TouchableOpacity
+                      key={profile.id}
+                      style={styles.mentionItem}
+                      onPress={() => selectMention(profile)}
+                    >
+                      {profile.avatar_url ? (
+                        <Image 
+                          source={{ uri: profile.avatar_url }} 
+                          style={styles.mentionAvatar} 
+                        />
+                      ) : (
+                        <View style={styles.mentionAvatarPlaceholder}>
+                          <AtSign size={14} color="#666" />
+                        </View>
+                      )}
+                      <Text style={styles.mentionName}>{profile.full_name}</Text>
+                    </TouchableOpacity>
                   ))}
                 </View>
               )}
-            </View>
+              
+              {images.length > 0 && (
+                <ScrollView 
+                  horizontal 
+                  style={styles.imagePreviewScroll}
+                  showsHorizontalScrollIndicator={false}
+                >
+                  {images.map((uri, index) => (
+                    <View key={index} style={styles.imagePreviewContainer}>
+                      <Image source={{ uri }} style={styles.imagePreview} />
+                      <TouchableOpacity
+                        style={styles.removeImageButton}
+                        onPress={() => removeImage(index)}
+                      >
+                        <X size={16} color="#FFF" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+              
+              <View style={styles.hashtagSection}>
+                <View style={styles.hashtagInputContainer}>
+                  <Hash size={16} color="#0066CC" />
+                  <TextInput
+                    style={styles.hashtagInput}
+                    placeholder="Add hashtags (max 5)"
+                    placeholderTextColor="#aaaaaa"
+                    value={currentHashtag}
+                    onChangeText={handleHashtagChange}
+                    onSubmitEditing={addHashtag}
+                    maxLength={20}
+                  />
+                  <TouchableOpacity 
+                    style={[
+                      styles.addHashtagButton,
+                      { opacity: currentHashtag.trim() !== '' ? 1 : 0.5 }
+                    ]}
+                    onPress={addHashtag}
+                    disabled={currentHashtag.trim() === ''}
+                  >
+                    <Plus size={16} color="#FFF" />
+                  </TouchableOpacity>
+                </View>
+                
+                {hashtags.length > 0 && (
+                  <View style={styles.hashtagChipsContainer}>
+                    {hashtags.map((tag) => (
+                      <View key={tag} style={styles.hashtagChip}>
+                        <Text style={styles.hashtagChipText}>#{tag}</Text>
+                        <TouchableOpacity
+                          style={styles.removeHashtagButton}
+                          onPress={() => removeHashtag(tag)}
+                        >
+                          <X size={12} color="#0066CC" />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            </Animated.View>
+          </ScrollView>
+          
+          <Animated.View style={[styles.toolbar, toolbarAnimatedStyle]}>
+            <TouchableOpacity style={styles.toolbarButton} onPress={pickImage}>
+              <LinearGradient
+                colors={['#f2f8ff', '#e6f0ff']}
+                style={styles.toolbarButtonGradient}
+              >
+                <ImageIcon size={20} color="#0066CC" />
+              </LinearGradient>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.toolbarButton}>
+              <LinearGradient
+                colors={['#f2f8ff', '#e6f0ff']}
+                style={styles.toolbarButtonGradient}
+              >
+                <Camera size={20} color="#0066CC" />
+              </LinearGradient>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.toolbarButton}>
+              <LinearGradient
+                colors={['#f2f8ff', '#e6f0ff']}
+                style={styles.toolbarButtonGradient}
+              >
+                <Smile size={20} color="#0066CC" />
+              </LinearGradient>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.toolbarButton}>
+              <LinearGradient
+                colors={['#f2f8ff', '#e6f0ff']}
+                style={styles.toolbarButtonGradient}
+              >
+                <MapPin size={20} color="#0066CC" />
+              </LinearGradient>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.toolbarButton}>
+              <LinearGradient
+                colors={['#f2f8ff', '#e6f0ff']}
+                style={styles.toolbarButtonGradient}
+              >
+                <Tag size={20} color="#0066CC" />
+              </LinearGradient>
+            </TouchableOpacity>
           </Animated.View>
-        </ScrollView>
-        
-        <Animated.View 
-          style={[
-            styles.toolbar,
-            { 
-              opacity: fadeAnim,
-              transform: [{ translateY: -slideAnim }] 
-            }
-          ]}
-        >
-          <TouchableOpacity style={styles.toolbarButton} onPress={pickImage}>
-            <ImageIcon size={22} color="#0066CC" />
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.toolbarButton}>
-            <Camera size={22} color="#0066CC" />
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.toolbarButton}>
-            <Smile size={22} color="#0066CC" />
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.toolbarButton}>
-            <MapPin size={22} color="#0066CC" />
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.toolbarButton}>
-            <Tag size={22} color="#0066CC" />
-          </TouchableOpacity>
-        </Animated.View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </LinearGradient>
     </SafeAreaView>
   );
 }
@@ -594,22 +623,32 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
+  gradientBackground: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#EBEBEB',
+    borderBottomColor: 'rgba(0,0,0,0.05)',
     backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+    zIndex: 10,
   },
   headerButton: {
     padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.03)',
   },
   headerTitle: {
     fontSize: 18,
@@ -621,6 +660,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
+    shadowColor: '#0066CC',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
   },
   postButtonText: {
     color: '#FFFFFF',
@@ -630,24 +674,39 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  scrollViewContent: {
+    paddingBottom: 20,
+  },
   contentContainer: {
     padding: 16,
   },
   privacySelector: {
     flexDirection: 'row',
-    marginBottom: 16,
-    backgroundColor: '#F5F5F5',
-    borderRadius: 25,
+    marginVertical: 16,
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    borderRadius: 16,
     padding: 4,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   privacyOption: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
+    paddingVertical: 10,
     paddingHorizontal: 12,
-    borderRadius: 20,
+    borderRadius: 12,
     flex: 1,
+  },
+  privacyDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: 'rgba(0,0,0,0.1)',
   },
   privacyOptionSelected: {
     backgroundColor: '#FFFFFF',
@@ -658,7 +717,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   privacyText: {
-    marginLeft: 6,
+    marginLeft: 8,
     fontSize: 14,
     fontFamily: 'Inter_500Medium',
     color: '#666',
@@ -667,7 +726,18 @@ const styles = StyleSheet.create({
     color: '#0066CC',
   },
   textInputContainer: {
-    marginBottom: 16,
+    marginBottom: 24,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  inputGradient: {
+    borderRadius: 16,
+    padding: 4,
   },
   contentInput: {
     fontSize: 16,
@@ -675,32 +745,55 @@ const styles = StyleSheet.create({
     color: '#333',
     textAlignVertical: 'top',
     minHeight: 120,
-    paddingBottom: 30, // Space for the character counter
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 40, // Space for the character counter
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
   },
   charCounter: {
     position: 'absolute',
-    bottom: 8,
-    right: 8,
-    fontSize: 12,
+    bottom: 12,
+    right: 16,
+    fontSize: 13,
     fontFamily: 'Inter_400Regular',
     color: '#999',
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  charCounterWarning: {
+    color: '#f59e0b',
+  },
+  charCounterError: {
+    color: '#ef4444',
   },
   imagePreviewScroll: {
-    marginBottom: 16,
+    marginBottom: 24,
   },
   imagePreviewContainer: {
     marginRight: 12,
     position: 'relative',
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   imagePreview: {
-    width: 100,
-    height: 100,
-    borderRadius: 8,
+    width: 120,
+    height: 120,
+    borderRadius: 12,
   },
   removeImageButton: {
     position: 'absolute',
-    top: 4,
-    right: 4,
+    top: 8,
+    right: 8,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
     borderRadius: 12,
     width: 24,
@@ -709,19 +802,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   hashtagSection: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
   hashtagInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 25,
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
   },
   hashtagInput: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 10,
     paddingHorizontal: 8,
     fontSize: 14,
     fontFamily: 'Inter_400Regular',
@@ -729,11 +824,16 @@ const styles = StyleSheet.create({
   },
   addHashtagButton: {
     backgroundColor: '#0066CC',
-    borderRadius: 15,
-    width: 30,
-    height: 30,
+    borderRadius: 10,
+    width: 28,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#0066CC',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 1,
   },
   hashtagChipsContainer: {
     flexDirection: 'row',
@@ -744,12 +844,14 @@ const styles = StyleSheet.create({
   hashtagChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 102, 204, 0.1)',
+    backgroundColor: 'rgba(0, 102, 204, 0.08)',
     borderRadius: 16,
     paddingVertical: 6,
     paddingHorizontal: 12,
     marginRight: 8,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 102, 204, 0.1)',
   },
   hashtagChipText: {
     fontSize: 14,
@@ -766,26 +868,45 @@ const styles = StyleSheet.create({
   toolbar: {
     flexDirection: 'row',
     borderTopWidth: 1,
-    borderTopColor: '#EBEBEB',
+    borderTopColor: 'rgba(0,0,0,0.05)',
     backgroundColor: '#FFFFFF',
-    paddingVertical: 8,
+    paddingVertical: 12,
     justifyContent: 'space-around',
-    paddingBottom: Platform.OS === 'ios' ? 30 : 10,
+    paddingBottom: Platform.OS === 'ios' ? 30 : 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
   toolbarButton: {
-    padding: 12,
+    padding: 6,
     borderRadius: 20,
+  },
+  toolbarButtonGradient: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#0066CC',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 102, 204, 0.1)',
   },
   mentionContainer: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#EBEBEB',
-    borderRadius: 8,
+    borderColor: 'rgba(0,0,0,0.08)',
+    borderRadius: 12,
     marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: 5,
     elevation: 3,
   },
   mentionItem: {
@@ -793,22 +914,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#EBEBEB',
+    borderBottomColor: 'rgba(0,0,0,0.05)',
   },
   mentionAvatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     marginRight: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
   },
   mentionAvatarPlaceholder: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#F0F2F5',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.03)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
   },
   mentionName: {
     fontSize: 14,
