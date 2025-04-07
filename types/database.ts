@@ -24,6 +24,8 @@ export interface Profile {
   rating?: string | number;
   patients_count?: string | number;
   // For storing additional profile settings like anonymity preferences
+  // NOTE: This field is not yet implemented in the database schema
+  // Only used client-side for now
   metadata?: {
     isAnonymous?: boolean;
     anonymousId?: string;

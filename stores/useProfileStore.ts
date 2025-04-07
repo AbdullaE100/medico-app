@@ -59,8 +59,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           education: get().educationData || [],
           // Ensure expertise is always an array
           expertise: profileData.expertise || [],
-          // Ensure metadata is available
-          metadata: profileData.metadata || {}
+          // Add empty metadata for backward compatibility
+          metadata: {}
         };
         
         console.log("Profile data received - full_name:", profile.full_name);
@@ -130,9 +130,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         delete profileData.education;
       }
       
-      // Save metadata for processing later
-      const metadataToSave = profileData.metadata ? { ...profileData.metadata } : undefined;
-      
+      // REMOVE METADATA HANDLING - column doesn't exist in database schema
       // Remove metadata field if it exists to avoid database error
       if (profileData.metadata !== undefined) {
         delete profileData.metadata;
@@ -144,7 +142,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       const allowedFields = [
         'id', 'full_name', 'specialty', 'hospital', 'location', 'bio', 'avatar_url',
         'expertise', 'skills', 'interests', 'languages', 'followers_count',
-        'following_count', 'posts_count', 'created_at', 'updated_at', 'metadata'
+        'following_count', 'posts_count', 'created_at', 'updated_at'
+        // 'metadata' removed from allowed fields
       ];
       
       Object.keys(profileData).forEach(key => {
@@ -217,8 +216,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         .upsert({
           id: user.id,
           ...profileData,
-          // Re-add metadata if we have it
-          ...(metadataToSave ? { metadata: metadataToSave } : {}),
+          // Remove metadata from the upsert
           updated_at: new Date().toISOString(),
         })
         .select()
@@ -250,8 +248,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           ...updatedProfileData,
           work_experience: workExperienceData || [],
           education: educationData || [],
-          // Ensure metadata is available
-          metadata: updatedProfileData.metadata || {}
+          // Ensure backward compatibility for metadata
+          metadata: {}  // Use empty object instead of updatedProfileData.metadata
         };
       } else if (currentProfile) {
         // If no data returned, construct the updated profile from current state and changes
@@ -262,8 +260,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
             profileData.work_experience : currentProfile.work_experience || [],
           education: profileData.education !== undefined ? 
             profileData.education : currentProfile.education || [],
-          // Update metadata
-          metadata: metadataToSave || currentProfile.metadata || {}
+          // Use empty metadata object for backward compatibility
+          metadata: {}
         };
       }
 
