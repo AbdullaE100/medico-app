@@ -1,0 +1,106 @@
+{
+  "expo": {
+    "name": "Medical Network",
+    "slug": "medical-network",
+    "version": "1.0.0",
+    "newArchEnabled": true,
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "medico",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.medical.network",
+      "newArchEnabled": true,
+      "permissions": ["NOTIFICATIONS"],
+      "associatedDomains": ["applinks:auth.medico-app.com", "applinks:cslxbdtaxirqfozfvjhg.supabase.co"]
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.medical.network",
+      "newArchEnabled": true,
+      "permissions": ["NOTIFICATIONS"],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "auth.medico-app.com",
+              "pathPrefix": "/redirect"
+            },
+            {
+              "scheme": "https",
+              "host": "cslxbdtaxirqfozfvjhg.supabase.co",
+              "pathPrefix": "/auth/v1/callback"
+            },
+            {
+              "scheme": "medico-app",
+              "host": "auth",
+              "pathPrefix": "/callback"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "react-native-reanimated",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#0066CC",
+          "sounds": ["./assets/sounds/notification.wav"]
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "tsconfigPaths": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "your-project-id"
+      },
+      "googleClientId": "747216005042-v9de9l8vqkm308q1q0rfofskeerbotjq.apps.googleusercontent.com",
+      "supabaseUrl": "https://cslxbdtaxirqfozfvjhg.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNzbHhiZHRheGlycWZvemZ2amhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE2MDcwODgsImV4cCI6MjA1NzE4MzA4OH0.Hj59fQGPZq7WO2aaE45xIwX5WrJ8RNk2UkuzVIcnV9I"
+    },
+    "notification": {
+      "icon": "./assets/images/notification-icon.png",
+      "color": "#0066CC",
+      "androidMode": "default",
+      "androidCollapsedTitle": "Medico",
+      "iosDisplayInForeground": false
+    },
+    "owner": "your-expo-username",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/your-project-id"
+    }
+  }
+}
