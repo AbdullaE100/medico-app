@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   Platform,
   FlatList,
-  ActivityIndicator
+  ActivityIndicator,
+  SectionList
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, {
@@ -30,12 +31,14 @@ import {
   X,
   MessageSquare,
   UserPlus,
+  UserCheck,
   AtSign,
-  MessageCircle,
-  BrainCircuit,
-  Check
+  Heart,
+  Users,
+  CheckCircle,
+  Trash2
 } from 'lucide-react-native';
-import { useNotificationsStore, NotificationType } from '@/stores/useNotificationsStore';
+import { useNotificationsStore, NotificationType, Notification } from '@/stores/useNotificationsStore';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -56,20 +59,73 @@ interface NotificationSlidingPanelProps {
 
 const NotificationIcon = ({ type, color }: { type: NotificationType; color: string }) => {
   switch (type) {
-    case 'message':
-      return <MessageSquare size={24} color={color} />;
-    case 'follow':
-      return <UserPlus size={24} color={color} />;
-    case 'mention':
-      return <AtSign size={24} color={color} />;
-    case 'comment':
-      return <MessageCircle size={24} color={color} />;
-    case 'ama_question':
-      return <BrainCircuit size={24} color={color} />;
+    // Network notifications
+    case 'connection_request_received':
     case 'connection_request':
       return <UserPlus size={24} color={color} />;
+      
+    case 'connection_accepted':
+      return <UserCheck size={24} color={color} />;
+      
+    case 'suggested_connection':
+      return <Users size={24} color={color} />;
+      
+    // Forum notifications
+    case 'post_reply':
+    case 'comment':
+      return <MessageSquare size={24} color={color} />;
+      
+    case 'post_mention':
+    case 'mention':
+      return <AtSign size={24} color={color} />;
+      
+    case 'post_like':
+      return <Heart size={24} color={color} />;
+      
+    // Message notifications
+    case 'direct_message':
+    case 'message':
+      return <MessageSquare size={24} color={color} />;
+      
+    // Legacy types
+    case 'follow':
+      return <UserPlus size={24} color={color} />;
+      
+    case 'ama_question':
+      return <Bell size={24} color={color} />;
+      
     default:
       return <Bell size={24} color={color} />;
+  }
+};
+
+// Get appropriate background color for notification type
+const getNotificationTypeColor = (type: NotificationType): string => {
+  switch (type) {
+    // Network notifications
+    case 'connection_request_received':
+    case 'connection_request':
+    case 'connection_accepted':
+    case 'suggested_connection':
+    case 'follow':
+      return '#8B5CF6'; // Purple for network notifications
+      
+    // Forum notifications
+    case 'post_reply':
+    case 'post_mention':
+    case 'post_like':
+    case 'comment':
+    case 'mention':
+      return '#0EA5E9'; // Blue for forum notifications
+      
+    // Message notifications
+    case 'direct_message':
+    case 'message':
+      return '#10B981'; // Green for messages
+      
+    // Default
+    default:
+      return '#6B7280'; // Gray for other types
   }
 };
 
@@ -84,7 +140,10 @@ const NotificationSlidingPanel: React.FC<NotificationSlidingPanelProps> = ({
     error, 
     fetchNotifications, 
     markAsRead, 
-    markAllAsRead 
+    markAllAsRead,
+    deleteNotification,
+    handleNotificationAction,
+    getGroupedNotifications
   } = useNotificationsStore();
   
   // Animation values
@@ -170,41 +229,22 @@ const NotificationSlidingPanel: React.FC<NotificationSlidingPanelProps> = ({
     });
 
   // Handler for notification press
-  const handleNotificationPress = async (notification: any) => {
+  const handleNotificationPress = async (notification: Notification) => {
     if (!notification.is_read) {
       await markAsRead(notification.id);
     }
 
-    // Navigate based on notification type
-    switch (notification.type) {
-      case 'message':
-        router.push(`/chat/${notification.data.chat_id}`);
-        break;
-      case 'follow':
-        router.push(`/network/doctor/${notification.data.follower_id}`);
-        break;
-      case 'mention':
-        router.push(`/discussions/${notification.data.discussion_id}`);
-        break;
-      case 'comment':
-        router.push(`/discussions/${notification.data.discussion_id}`);
-        break;
-      case 'ama_question':
-        router.push(`/discussions/${notification.data.ama_id}`);
-        break;
-      case 'connection_request':
-        router.push('/network');
-        break;
-    }
+    // Use the centralized notification action handler
+    handleNotificationAction(notification);
     
-    // Close the panel after navigation
+    // Close the panel after handling
     onClose();
   };
 
   // Individual notification item with swipe-to-dismiss gesture
-  const NotificationItem = ({ item }: { item: any }) => {
+  const NotificationItem = ({ item }: { item: Notification }) => {
     const itemTranslateX = useSharedValue(0);
-    const itemHeight = useSharedValue(80); // Approximate height of notification
+    const itemHeight = useSharedValue(90); // Slightly taller for better readability
     const itemOpacity = useSharedValue(1);
     const itemMargin = useSharedValue(10);
     
@@ -243,40 +283,156 @@ const NotificationSlidingPanel: React.FC<NotificationSlidingPanelProps> = ({
       marginBottom: itemMargin.value
     }));
     
+    // Get appropriate background color
+    const backgroundColor = getNotificationTypeColor(item.type);
+    const isRead = item.is_read;
+    
     return (
       <GestureDetector gesture={swipeGesture}>
-        <Animated.View style={[styles.notificationItem, itemAnimatedStyle]}>
+        <Animated.View style={[
+          styles.notificationItem, 
+          itemAnimatedStyle,
+          isRead ? styles.notificationItemRead : null
+        ]}>
           <TouchableOpacity
             style={styles.notificationContent}
             onPress={() => handleNotificationPress(item)}
             activeOpacity={0.7}
           >
-            <View style={[
-              styles.iconContainer,
-              !item.is_read && styles.unreadIconContainer
-            ]}>
+            <View style={[styles.iconContainer, { backgroundColor }]}>
               <NotificationIcon 
-                type={item.type}
-                color={item.is_read ? '#666666' : '#0066CC'} 
+                type={item.type} 
+                color="#FFFFFF" 
               />
+              {!isRead && <View style={styles.unreadDot} />}
             </View>
-            <View style={styles.contentContainer}>
-              <Text style={[
-                styles.notificationTitle,
-                !item.is_read && styles.unreadTitle
-              ]}>
+            <View style={styles.textContainer}>
+              <Text 
+                style={[styles.notificationTitle, isRead ? styles.readText : null]} 
+                numberOfLines={1}
+              >
                 {item.title}
               </Text>
-              <Text style={styles.notificationMessage}>
+              <Text 
+                style={[styles.notificationMessage, isRead ? styles.readText : null]} 
+                numberOfLines={2}
+              >
                 {item.content}
               </Text>
-              <Text style={styles.notificationTimestamp}>
-                {new Date(item.created_at).toLocaleDateString()}
+              <Text style={styles.notificationTime}>
+                {formatTimeAgo(new Date(item.created_at))}
               </Text>
             </View>
+            <TouchableOpacity 
+              style={styles.deleteButton}
+              onPress={() => deleteNotification(item.id)}
+              hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+            >
+              <Trash2 size={16} color="#9CA3AF" />
+            </TouchableOpacity>
           </TouchableOpacity>
         </Animated.View>
       </GestureDetector>
+    );
+  };
+
+  // Format time ago (e.g., "2 hours ago", "3 days ago")
+  const formatTimeAgo = (date: Date): string => {
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    
+    if (diffInSeconds < 60) {
+      return 'just now';
+    }
+    
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    if (diffInMinutes < 60) {
+      return `${diffInMinutes} ${diffInMinutes === 1 ? 'minute' : 'minutes'} ago`;
+    }
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) {
+      return `${diffInHours} ${diffInHours === 1 ? 'hour' : 'hours'} ago`;
+    }
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) {
+      return `${diffInDays} ${diffInDays === 1 ? 'day' : 'days'} ago`;
+    }
+    
+    return date.toLocaleDateString();
+  };
+
+  const renderNotificationsContent = () => {
+    if (isLoading) {
+      return (
+        <View style={styles.centeredContent}>
+          <ActivityIndicator size="large" color="#0066CC" />
+          <Text style={styles.centeredText}>Loading notifications...</Text>
+        </View>
+      );
+    }
+
+    if (error) {
+      return (
+        <View style={styles.centeredContent}>
+          <Text style={styles.errorText}>Error: {error}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={fetchNotifications}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (notifications.length === 0) {
+      return (
+        <View style={styles.centeredContent}>
+          <Bell size={40} color="#9CA3AF" />
+          <Text style={[styles.centeredText, { marginTop: 16 }]}>
+            No notifications yet
+          </Text>
+          <Text style={styles.subtleText}>
+            We'll notify you when something happens
+          </Text>
+        </View>
+      );
+    }
+
+    // Group notifications by date
+    const groupedNotifications = getGroupedNotifications();
+    const sections = [];
+    
+    if (groupedNotifications.today.length > 0) {
+      sections.push({
+        title: 'Today',
+        data: groupedNotifications.today
+      });
+    }
+    
+    if (groupedNotifications.earlier.length > 0) {
+      sections.push({
+        title: 'Earlier',
+        data: groupedNotifications.earlier
+      });
+    }
+
+    return (
+      <SectionList
+        sections={sections}
+        renderItem={({ item }) => <NotificationItem item={item} />}
+        renderSectionHeader={({ section: { title } }) => (
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{title}</Text>
+          </View>
+        )}
+        keyExtractor={item => item.id}
+        contentContainerStyle={styles.listContent}
+        stickySectionHeadersEnabled={true}
+        showsVerticalScrollIndicator={false}
+      />
     );
   };
 
@@ -300,62 +456,6 @@ const NotificationSlidingPanel: React.FC<NotificationSlidingPanelProps> = ({
     display: panelVisible.value ? 'flex' : 'none',
   }));
   
-  // Render notifications content
-  const renderNotificationsContent = () => {
-    if (isLoading) {
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#0066CC" />
-          <Text style={styles.loadingText}>Loading notifications...</Text>
-        </View>
-      );
-    }
-    
-    if (error) {
-      return (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity 
-            style={styles.retryButton}
-            onPress={fetchNotifications}
-          >
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-    
-    return (
-      <>
-        <View style={styles.headerAction}>
-          {notifications.some(n => !n.is_read) && (
-            <TouchableOpacity style={styles.markAllButton} onPress={markAllAsRead}>
-              <Check size={16} color="#0066CC" />
-              <Text style={styles.markAllText}>Mark all as read</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        
-        <FlatList
-          data={notifications}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <NotificationItem item={item} />}
-          contentContainerStyle={styles.notificationsList}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Bell size={48} color="#666666" />
-              <Text style={styles.emptyTitle}>No notifications yet</Text>
-              <Text style={styles.emptyText}>
-                We'll notify you when something important happens
-              </Text>
-            </View>
-          }
-        />
-      </>
-    );
-  };
-
   return (
     <>
       <Animated.View style={[styles.backdrop, backdropStyle]}>
@@ -372,19 +472,18 @@ const NotificationSlidingPanel: React.FC<NotificationSlidingPanelProps> = ({
             <View style={styles.blurContainer}>
               <View style={styles.innerContainer}>
                 <View style={styles.header}>
-                  <View style={styles.headerTop}>
-                    <Text style={styles.title}>Notifications</Text>
-                    <TouchableOpacity 
-                      style={styles.closeButton} 
-                      onPress={onClose}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    >
-                      <X size={24} color="#333" />
+                  <Text style={styles.title}>Notifications</Text>
+                  {notifications.length > 0 && (
+                    <TouchableOpacity style={styles.markAllButton} onPress={markAllAsRead}>
+                      <CheckCircle size={18} color="#0066CC" />
+                      <Text style={styles.markAllText}>Mark all as read</Text>
                     </TouchableOpacity>
-                  </View>
-                  
-                  {renderNotificationsContent()}
+                  )}
+                  <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+                    <X size={24} color="#1F2937" />
+                  </TouchableOpacity>
                 </View>
+                {renderNotificationsContent()}
               </View>
             </View>
           </Animated.View>
@@ -463,12 +562,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 8,
-    backgroundColor: 'rgba(0, 102, 204, 0.1)',
-    borderRadius: 20,
   },
   markAllText: {
     fontSize: 14,
-    fontFamily: 'Inter_500Medium',
     color: '#0066CC',
     marginLeft: 4,
   },
@@ -578,6 +674,68 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     paddingHorizontal: 20,
+  },
+  sectionHeader: {
+    backgroundColor: '#F9FAFB',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4B5563',
+  },
+  notificationItemRead: {
+    backgroundColor: '#F9FAFB',
+  },
+  readText: {
+    color: '#6B7280',
+  },
+  unreadDot: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#EF4444',
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+  },
+  notificationTime: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 4,
+  },
+  deleteButton: {
+    padding: 8,
+  },
+  centeredContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  centeredText: {
+    fontSize: 16,
+    color: '#4B5563',
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  subtleText: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  listContent: {
+    paddingBottom: 20,
+  },
+  textContainer: {
+    flex: 1,
+    marginLeft: 12,
   },
 });
 

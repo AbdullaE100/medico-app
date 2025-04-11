@@ -17,7 +17,7 @@ import Animated, {
   runOnJS
 } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
-import { Bell, MessageSquare, UserPlus, AtSign, MessageCircle, BrainCircuit } from 'lucide-react-native';
+import { Bell, MessageSquare, Heart, AtSign, Users, UserPlus, UserCheck } from 'lucide-react-native';
 import { NotificationType } from '@/stores/useNotificationsStore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -27,28 +27,41 @@ interface NotificationToastProps {
   title: string;
   message: string;
   type: NotificationType;
-  data?: Record<string, any>;
+  data: Record<string, any>;
   onDismiss: () => void;
-  autoDismiss?: boolean;
-  dismissDuration?: number;
 }
 
 const NotificationIcon = ({ type }: { type: NotificationType }) => {
+  const iconProps = { size: 20, color: '#FFFFFF' };
+  
   switch (type) {
-    case 'message':
-      return <MessageSquare size={20} color="#FFFFFF" />;
-    case 'follow':
-      return <UserPlus size={20} color="#FFFFFF" />;
-    case 'mention':
-      return <AtSign size={20} color="#FFFFFF" />;
-    case 'comment':
-      return <MessageCircle size={20} color="#FFFFFF" />;
-    case 'ama_question':
-      return <BrainCircuit size={20} color="#FFFFFF" />;
+    case 'connection_request_received':
     case 'connection_request':
-      return <UserPlus size={20} color="#FFFFFF" />;
+      return <UserPlus {...iconProps} />;
+      
+    case 'connection_accepted':
+      return <UserCheck {...iconProps} />;
+      
+    case 'suggested_connection':
+      return <Users {...iconProps} />;
+      
+    case 'post_reply':
+    case 'comment':
+      return <MessageSquare {...iconProps} />;
+      
+    case 'post_mention':
+    case 'mention':
+      return <AtSign {...iconProps} />;
+      
+    case 'post_like':
+      return <Heart {...iconProps} />;
+      
+    case 'direct_message':
+    case 'message':
+      return <MessageSquare {...iconProps} />;
+      
     default:
-      return <Bell size={20} color="#FFFFFF" />;
+      return <Bell {...iconProps} />;
   }
 };
 
@@ -56,17 +69,41 @@ const NotificationToast: React.FC<NotificationToastProps> = ({
   title,
   message,
   type,
-  data = {},
-  onDismiss,
-  autoDismiss = true,
-  dismissDuration = 4000
+  data,
+  onDismiss
 }) => {
   const router = useRouter();
   const translateY = useSharedValue(-100);
   const opacity = useSharedValue(0);
   const scale = useSharedValue(0.9);
+  const timeout = useRef<NodeJS.Timeout | null>(null);
   
-  // Handle auto dismiss
+  // Determine icon background color based on notification type
+  const getBackgroundColor = (): string => {
+    switch (type) {
+      case 'connection_request_received':
+      case 'connection_request':
+      case 'connection_accepted':
+      case 'suggested_connection':
+        return '#8B5CF6'; // Purple for network notifications
+        
+      case 'post_reply':
+      case 'post_mention':
+      case 'post_like':
+      case 'comment':
+      case 'mention':
+        return '#0EA5E9'; // Blue for forum notifications
+        
+      case 'direct_message':
+      case 'message':
+        return '#10B981'; // Green for messages
+        
+      default:
+        return '#0066CC'; // Default blue
+    }
+  };
+  
+  // Show toast when component mounts
   useEffect(() => {
     // Animate in
     translateY.value = withSpring(0, { 
@@ -79,17 +116,18 @@ const NotificationToast: React.FC<NotificationToastProps> = ({
       stiffness: 120 
     });
     
-    // Auto dismiss if enabled
-    if (autoDismiss) {
-      const dismissTimer = setTimeout(() => {
-        dismiss();
-      }, dismissDuration);
-      
-      return () => clearTimeout(dismissTimer);
-    }
+    // Auto dismiss after 4 seconds
+    timeout.current = setTimeout(() => {
+      handleDismiss();
+    }, 4000);
+    
+    return () => {
+      if (timeout.current) clearTimeout(timeout.current);
+    };
   }, []);
   
-  const dismiss = () => {
+  // Handle dismiss
+  const handleDismiss = () => {
     // Animate out
     translateY.value = withTiming(-100, { 
       duration: 300, 
@@ -102,33 +140,55 @@ const NotificationToast: React.FC<NotificationToastProps> = ({
       duration: 250 
     }, () => {
       // Call onDismiss callback after animation is complete
-      runOnJS(onDismiss)();
+      onDismiss();
     });
   };
   
+  // Handle press
   const handlePress = () => {
-    dismiss();
+    handleDismiss();
     
     // Navigate based on notification type
     switch (type) {
-      case 'message':
-        router.push(`/chat/${data.chat_id}`);
-        break;
-      case 'follow':
-        router.push(`/network/doctor/${data.follower_id}`);
-        break;
-      case 'mention':
-        router.push(`/discussions/${data.discussion_id}`);
-        break;
-      case 'comment':
-        router.push(`/discussions/${data.discussion_id}`);
-        break;
-      case 'ama_question':
-        router.push(`/discussions/${data.ama_id}`);
-        break;
+      case 'connection_request_received':
       case 'connection_request':
         router.push('/network');
         break;
+        
+      case 'connection_accepted':
+      case 'suggested_connection':
+        router.push('/network');
+        break;
+        
+      case 'post_reply':
+      case 'comment':
+      case 'post_mention':
+      case 'mention':
+      case 'post_like':
+        if (data.discussion_id) {
+          router.push({
+            pathname: '/discussions/[id]',
+            params: { id: data.discussion_id }
+          });
+        } else {
+          router.push('/discussions');
+        }
+        break;
+        
+      case 'direct_message':
+      case 'message':
+        if (data.chat_id) {
+          router.push({
+            pathname: '/chat/[id]',
+            params: { id: data.chat_id }
+          });
+        } else {
+          router.push('/chat');
+        }
+        break;
+        
+      default:
+        router.push('/notifications');
     }
   };
   
@@ -143,7 +203,7 @@ const NotificationToast: React.FC<NotificationToastProps> = ({
   return (
     <Animated.View style={[styles.container, animatedStyle]}>
       <TouchableOpacity 
-        style={styles.content} 
+        style={[styles.content, { backgroundColor: getBackgroundColor() }]} 
         activeOpacity={0.9}
         onPress={handlePress}
       >
@@ -160,7 +220,7 @@ const NotificationToast: React.FC<NotificationToastProps> = ({
         </View>
         <TouchableOpacity 
           style={styles.dismissButton}
-          onPress={dismiss}
+          onPress={handleDismiss}
           hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
         >
           <Text style={styles.dismissText}>✕</Text>
@@ -186,7 +246,6 @@ const styles = StyleSheet.create({
   content: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#333333',
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 16,

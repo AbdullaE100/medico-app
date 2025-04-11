@@ -94,7 +94,7 @@ END $$;
 -- Create discussion votes table if it doesn't exist
 CREATE TABLE IF NOT EXISTS discussion_votes (
   discussion_id uuid REFERENCES discussions(id) ON DELETE CASCADE,
-  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES profiles(id) ON DELETE CASCADE,
   vote_type text CHECK (vote_type IN ('upvote', 'downvote')),
   created_at timestamptz DEFAULT now(),
   PRIMARY KEY (discussion_id, user_id)
@@ -111,7 +111,7 @@ END $$;
 -- Create discussion bookmarks table if it doesn't exist
 CREATE TABLE IF NOT EXISTS discussion_bookmarks (
   discussion_id uuid REFERENCES discussions(id) ON DELETE CASCADE,
-  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES profiles(id) ON DELETE CASCADE,
   created_at timestamptz DEFAULT now(),
   PRIMARY KEY (discussion_id, user_id)
 );

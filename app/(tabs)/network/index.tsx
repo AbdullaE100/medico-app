@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -6,37 +6,42 @@ import {
   ScrollView, 
   Image, 
   TextInput, 
-  Pressable, 
   FlatList, 
   RefreshControl, 
   Animated, 
   Dimensions, 
   Platform,
   StatusBar,
-  TouchableOpacity
+  TouchableOpacity,
+  Pressable
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { 
   Search, 
-  Filter, 
+  Sliders, 
   MapPin, 
   Building2, 
   Users, 
-  ChevronRight, 
   UserPlus, 
   UserCheck, 
-  Heart,
+  ChevronRight,
   Stethoscope,
-  User,
   UserCircle,
-  AlertCircle
+  AlertCircle,
+  Clock,
+  X,
+  ArrowUpDown
 } from 'lucide-react-native';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useProfileStore } from '@/stores/useProfileStore';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { ConnectionRequestCard } from '@/components/ConnectionRequestCard';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
+import ProfileSlidingPanel from '@/components/ProfileSlidingPanel';
+import { MotiView } from 'moti';
+import { Skeleton } from '@/components/Skeleton';
 
 const { width, height } = Dimensions.get('window');
 
@@ -49,24 +54,33 @@ interface ProfileAvatarProps {
 
 // Placeholder component for missing profile images
 const ProfileAvatar = ({ uri, size = 60, isAnonymous = false }: ProfileAvatarProps) => {
-  // If we have a real avatar URL and not anonymous mode, show the actual image
-  if (uri && uri.startsWith('http') && !isAnonymous) {
-    return <Image source={{ uri }} style={[styles.doctorAvatar, { width: size, height: size, borderRadius: size / 2 }]} />;
+  // If we have a real avatar URL, show the actual image regardless of anonymous mode
+  if (uri && uri.startsWith('http')) {
+    return (
+      <View style={[styles.avatarContainer, { width: size, height: size }]}>
+        <Image 
+          source={{ uri }} 
+          style={[
+            styles.doctorAvatar, 
+            { width: size, height: size, borderRadius: size / 2 }
+          ]} 
+        />
+      </View>
+    );
   }
   
-  // If anonymous mode OR no avatar is available
+  // If no avatar is available, show placeholder
   return (
-    <View style={[styles.avatarPlaceholder, 
-      isAnonymous ? styles.anonymousAvatarPlaceholder : {},
-      { width: size, height: size, borderRadius: size / 2 }
+    <View style={[
+      styles.avatarContainer,
+      { width: size, height: size }
     ]}>
-      {isAnonymous ? (
-        <View style={styles.anonymousAvatarInner}>
-          <Stethoscope size={size * 0.4} color="#FFFFFF" />
-        </View>
-      ) : (
-        <UserCircle size={size * 0.6} color="#FFFFFF" />
-      )}
+      <LinearGradient
+        colors={['#6366F1', '#2563EB']}
+        style={[styles.avatarPlaceholder, { width: size, height: size, borderRadius: size / 2 }]}
+      >
+        <UserCircle size={size * 0.5} color="#FFFFFF" />
+      </LinearGradient>
     </View>
   );
 };
@@ -103,53 +117,284 @@ const ProfileCompletionBanner = ({
     messageTitle = 'Action Required!';
     
     if (missingAvatar && invalidName) {
-      messageDesc = 'Profile image and proper name are required to appear in doctor directory';
+      messageDesc = 'Profile image and proper name are required';
     } else if (missingAvatar) {
-      messageDesc = 'Profile image is required to appear in doctor directory';
+      messageDesc = 'Profile image is required';
     } else {
-      messageDesc = 'Proper name (not email) is required to appear in doctor directory';
+      messageDesc = 'Proper name (not email) is required';
     }
   }
   
+  const progressWidth = (profileCompletionPercent / 100) * (width - 64);
+  
   return (
-    <TouchableOpacity 
-      style={[
-        styles.completionBanner,
-        (missingAvatar || invalidName) ? styles.criticalBanner : {}
-      ]}
-      onPress={onPress}
+    <MotiView
+      from={{ opacity: 0, translateY: 10 }}
+      animate={{ opacity: 1, translateY: 0 }}
+      transition={{ type: 'timing', duration: 500 }}
     >
-      <View style={styles.completionIconContainer}>
-        {(missingAvatar || invalidName) ? (
-          <AlertCircle size={18} color="#FF3B30" />
-        ) : (
-          <AlertCircle size={18} color="#FF9500" />
-        )}
-      </View>
-      <View style={styles.completionTextContainer}>
-        <Text style={[
-          styles.completionTitle,
-          (missingAvatar || invalidName) ? styles.criticalTitle : {}
-        ]}>
-          {messageTitle}
-        </Text>
+      <TouchableOpacity 
+        style={[
+          styles.completionBanner,
+          (missingAvatar || invalidName) ? styles.criticalBanner : {}
+        ]}
+        onPress={onPress}
+        activeOpacity={0.9}
+      >
+        <View style={styles.completionTopRow}>
+          <View style={styles.completionIconContainer}>
+            {(missingAvatar || invalidName) ? (
+              <AlertCircle size={18} color="#FF3B30" />
+            ) : (
+              <AlertCircle size={18} color="#FF9500" />
+            )}
+          </View>
+          <Text style={[
+            styles.completionTitle,
+            (missingAvatar || invalidName) ? styles.criticalTitle : {}
+          ]}>
+            {messageTitle}
+          </Text>
+          <ChevronRight size={16} color="#64748B" />
+        </View>
         <Text style={styles.completionDesc}>
           {messageDesc}
         </Text>
-      </View>
-      <View style={styles.completionProgressContainer}>
-        <Text style={styles.completionPercent}>{profileCompletionPercent}%</Text>
-        <ChevronRight size={16} color="#64748B" />
-      </View>
-    </TouchableOpacity>
+        <View style={styles.progressBarContainer}>
+          <View style={styles.progressBarBackground}>
+            <View 
+              style={[
+                styles.progressBarFill, 
+                { width: progressWidth },
+                (missingAvatar || invalidName) ? styles.criticalProgressFill : {}
+              ]} 
+            />
+          </View>
+          <Text style={styles.completionPercent}>{profileCompletionPercent}%</Text>
+        </View>
+      </TouchableOpacity>
+    </MotiView>
   );
 };
+
+// Specialty tag component
+const SpecialtyTag = ({ specialty, isSelected, onPress }: { specialty: string, isSelected: boolean, onPress: () => void }) => (
+  <TouchableOpacity
+    style={[
+      styles.specialtyTag,
+      isSelected && styles.specialtyTagSelected
+    ]}
+    onPress={onPress}
+    activeOpacity={0.7}
+  >
+    <Text 
+      style={[
+        styles.specialtyTagText,
+        isSelected && styles.specialtyTagTextSelected
+      ]}
+    >
+      {specialty}
+    </Text>
+  </TouchableOpacity>
+);
+
+// Doctor card component
+const DoctorCard = ({ doctor, onConnect, onViewProfile }: { 
+  doctor: any, 
+  onConnect: () => void, 
+  onViewProfile: () => void 
+}) => {
+  return (
+    <MotiView
+      from={{ opacity: 0, translateY: 20 }}
+      animate={{ opacity: 1, translateY: 0 }}
+      transition={{ type: 'timing', duration: 500, delay: Math.random() * 300 }}
+    >
+      <Pressable 
+        style={({ pressed }) => [
+          styles.doctorCard,
+          pressed && styles.doctorCardPressed
+        ]}
+        onPress={onViewProfile}
+      >
+        <ProfileAvatar uri={doctor.avatar_url} size={60} />
+        
+        <View style={styles.doctorCardContent}>
+          <View style={styles.doctorCardHeader}>
+            <Text style={styles.doctorName} numberOfLines={1}>{doctor.full_name}</Text>
+            {doctor.is_verified && (
+              <View style={styles.verifiedBadge}>
+                <Text style={styles.verifiedText}>✓</Text>
+              </View>
+            )}
+          </View>
+          
+          <View style={styles.specialtyRow}>
+            <View style={styles.specialtyBadge}>
+              <Text style={styles.specialtyText}>{doctor.specialty}</Text>
+            </View>
+          </View>
+          
+          <View style={styles.doctorDetailsRow}>
+            <View style={styles.detailItem}>
+              <Building2 size={14} color="#64748b" />
+              <Text style={styles.detailText} numberOfLines={1}>{doctor.hospital}</Text>
+            </View>
+            
+            <View style={styles.detailItem}>
+              <MapPin size={14} color="#64748b" />
+              <Text style={styles.detailText} numberOfLines={1}>{doctor.location}</Text>
+            </View>
+          </View>
+          
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Users size={12} color="#64748b" />
+              <Text style={styles.statCount}>{doctor.followers_count}</Text>
+              <Text style={styles.statLabel}>Connections</Text>
+            </View>
+            
+            <View style={styles.dotDivider} />
+            
+            <View style={styles.statItem}>
+              <Clock size={12} color="#64748b" />
+              <Text style={styles.statCount}>{Math.floor(Math.random() * 10) + 1}+</Text>
+              <Text style={styles.statLabel}>Years</Text>
+            </View>
+          </View>
+        </View>
+        
+        <TouchableOpacity 
+          style={[
+            styles.connectButton,
+            doctor.connection_status === 'connected' && styles.connectedButton,
+            doctor.connection_status === 'pending' && styles.pendingButton
+          ]}
+          onPress={onConnect}
+        >
+          {doctor.connection_status === 'connected' ? (
+            <UserCheck size={18} color="#0284c7" />
+          ) : doctor.connection_status === 'pending' ? (
+            <Text style={styles.pendingButtonText}>Pending</Text>
+          ) : (
+            <UserPlus size={18} color="#FFFFFF" />
+          )}
+        </TouchableOpacity>
+      </Pressable>
+    </MotiView>
+  );
+};
+
+// Sort menu component
+const SortMenu = ({ isVisible, currentSort, onSelect, onDismiss }: {
+  isVisible: boolean;
+  currentSort: string;
+  onSelect: (sort: 'followers' | 'recent') => void;
+  onDismiss: () => void;
+}) => {
+  if (!isVisible) return null;
+  
+  return (
+    <MotiView
+      from={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      style={styles.sortMenuContainer}
+    >
+      <View style={styles.sortMenu}>
+        <View style={styles.sortMenuHeader}>
+          <Text style={styles.sortMenuTitle}>Sort By</Text>
+          <TouchableOpacity onPress={onDismiss}>
+            <X size={18} color="#64748B" />
+          </TouchableOpacity>
+        </View>
+        
+        <TouchableOpacity
+          style={[
+            styles.sortOption,
+            currentSort === 'followers' && styles.sortOptionSelected
+          ]}
+          onPress={() => {
+            onSelect('followers');
+            onDismiss();
+          }}
+        >
+          <Users size={16} color={currentSort === 'followers' ? "#0284c7" : "#64748B"} />
+          <Text 
+            style={[
+              styles.sortOptionText,
+              currentSort === 'followers' && styles.sortOptionTextSelected
+            ]}
+          >
+            Most Connections
+          </Text>
+          {currentSort === 'followers' && (
+            <View style={styles.sortCheckmark}>
+              <Text>✓</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[
+            styles.sortOption,
+            currentSort === 'recent' && styles.sortOptionSelected
+          ]}
+          onPress={() => {
+            onSelect('recent');
+            onDismiss();
+          }}
+        >
+          <Clock size={16} color={currentSort === 'recent' ? "#0284c7" : "#64748B"} />
+          <Text 
+            style={[
+              styles.sortOptionText,
+              currentSort === 'recent' && styles.sortOptionTextSelected
+            ]}
+          >
+            Recently Added
+          </Text>
+          {currentSort === 'recent' && (
+            <View style={styles.sortCheckmark}>
+              <Text>✓</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+    </MotiView>
+  );
+};
+
+// Empty search results component
+const EmptySearchResults = ({ query, filter }: { query: string, filter: string }) => (
+  <MotiView
+    from={{ opacity: 0, translateY: 20 }}
+    animate={{ opacity: 1, translateY: 0 }}
+    transition={{ type: 'timing', duration: 500 }}
+    style={styles.emptyStateContainer}
+  >
+    <Search size={48} color="#CBD5E1" />
+    <Text style={styles.emptyStateTitle}>No doctors found</Text>
+    <Text style={styles.emptyStateMessage}>
+      {query && filter !== 'All' 
+        ? `No ${filter} specialists found matching "${query}"`
+        : query 
+          ? `No doctors found matching "${query}"`
+          : filter !== 'All'
+            ? `No ${filter} specialists found`
+            : `No doctors in the directory yet`
+      }
+    </Text>
+  </MotiView>
+);
 
 export default function DoctorDirectory() {
   const [activeFilter, setActiveFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'followers' | 'recent'>('followers');
-  const [anonymousView, setAnonymousView] = useState(false);
+  const [localPanelVisible, setLocalPanelVisible] = useState(false);
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
   const { 
     doctors, 
     receivedRequests,
@@ -165,13 +410,10 @@ export default function DoctorDirectory() {
   const router = useRouter();
 
   // Animation values
-  const headerHeight = useRef(new Animated.Value(0)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.95)).current;
-  const translateY = useRef(new Animated.Value(30)).current;
-  const iconPulse = useRef(new Animated.Value(1)).current;
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const searchBarTranslate = useRef(new Animated.Value(0)).current;
 
-  const filters = ['All', 'Neurology', 'Cardiology', 'Oncology', 'Surgery', 'Pediatrics'];
+  const filters = ['All', 'Neurology', 'Cardiology', 'Oncology', 'Surgery', 'Pediatrics', 'Dermatology', 'Orthopedics'];
 
   // Calculate profile completion
   const calculateProfileCompletion = () => {
@@ -202,58 +444,7 @@ export default function DoctorDirectory() {
     fetchProfile();
   }, [activeFilter, searchQuery, sortBy]);
 
-  // Start animations
-  useEffect(() => {
-    // Start header animation
-    Animated.timing(headerHeight, {
-      toValue: 1,
-      duration: 800,
-      useNativeDriver: false,
-    }).start();
-    
-    // Animate content fade in and scale
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(scaleAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-    ]).start();
-    
-    // Icon pulse animation
-    const pulseIcon = Animated.loop(
-      Animated.sequence([
-        Animated.timing(iconPulse, {
-          toValue: 1.15,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(iconPulse, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    
-    pulseIcon.start();
-    
-    return () => {
-      pulseIcon.stop();
-    };
-  }, []);
-
-  const onRefresh = React.useCallback(async () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
       await Promise.all([
@@ -266,106 +457,161 @@ export default function DoctorDirectory() {
     }
   }, [searchQuery, activeFilter, sortBy]);
 
-  const interpolatedHeaderHeight = headerHeight.interpolate({
-    inputRange: [0, 1],
-    outputRange: [60, Platform.OS === 'ios' ? 100 : 90]
+  // Animation for search bar shadow on scroll
+  const searchBarShadowOpacity = scrollY.interpolate({
+    inputRange: [0, 20],
+    outputRange: [0, 0.15],
+    extrapolate: 'clamp'
   });
-  
-  const navigateToProfile = () => {
+
+  // Animation for header blur intensity
+  const headerBlurIntensity = scrollY.interpolate({
+    inputRange: [0, 100],
+    outputRange: [0, 25],
+    extrapolate: 'clamp'
+  });
+
+  // Toggle search focus animation
+  useEffect(() => {
+    Animated.timing(searchBarTranslate, {
+      toValue: searchFocused ? 1 : 0,
+      duration: 250,
+      useNativeDriver: false
+    }).start();
+  }, [searchFocused]);
+
+  const handleProfilePress = () => {
     router.push('/profile');
   };
 
-  if (isLoading && !refreshing && doctors.length === 0) {
-    return <LoadingOverlay message="Loading doctors..." />;
-  }
+  const handleClosePanel = () => {
+    setLocalPanelVisible(false);
+  };
+
+  const handleFilterPress = (filter: string) => {
+    setActiveFilter(filter);
+  };
+
+  const handleDoctorCardPress = (doctorId: string) => {
+    router.push(`/network/doctor/${doctorId}`);
+  };
+
+  // Animation for search bar width
+  const searchBarWidth = searchBarTranslate.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['84%', '100%']
+  });
+  
+  // Animation for filter button opacity
+  const filterButtonOpacity = searchBarTranslate.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0]
+  });
+
+  // Render loading skeleton
+  const renderSkeleton = () => (
+    <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+      {[1, 2, 3].map((_, index) => (
+        <View key={index} style={[styles.doctorCard, { marginBottom: 16 }]}>
+          <Skeleton width={60} height={60} borderRadius={30} />
+          <View style={{ flex: 1, marginLeft: 16 }}>
+            <Skeleton width="70%" height={18} marginBottom={8} />
+            <Skeleton width="40%" height={16} marginBottom={12} />
+            <Skeleton width="90%" height={14} marginBottom={8} />
+            <Skeleton width="60%" height={14} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="dark-content" />
       
-      {/* Background Gradient with improved colors */}
-      <View style={styles.backgroundContainer}>
-        <LinearGradient
-          colors={['#0a2547', '#1a5cbe']}
-          style={styles.headerGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        />
-        
-        {/* Enhanced subtle decorative elements */}
-        <View style={styles.decorativeCircle1} />
-        <View style={styles.decorativeCircle2} />
-        <View style={styles.decorativeLine} />
-      </View>
-      
-      {/* Compact Animated Header */}
+      {/* Header */}
       <Animated.View 
         style={[
-          styles.animatedHeader,
-          { height: interpolatedHeaderHeight }
+          styles.header,
+          {
+            shadowOpacity: searchBarShadowOpacity
+          }
         ]}
       >
-        <View style={styles.headerTopRow}>
-          <View style={styles.logoContainer}>
-            <Animated.View 
-              style={[
-                styles.iconContainer,
-                { transform: [{ scale: iconPulse }] }
-              ]}
-            >
-              <Stethoscope size={20} color="#fff" />
-            </Animated.View>
-            <Animated.View style={styles.titleFade}>
-              <Text style={styles.logo}>Medical Network</Text>
-            </Animated.View>
+        <View style={styles.headerInner}>
+          <View style={styles.headerTop}>
+            <View style={styles.titleContainer}>
+              <Stethoscope size={18} color="#0284c7" />
+              <Text style={styles.headerTitle}>Network</Text>
+            </View>
           </View>
           
-          {/* Anonymous View Toggle */}
-          <TouchableOpacity
-            style={styles.anonymousToggle}
-            onPress={() => setAnonymousView(!anonymousView)}
-          >
-            <View style={styles.anonymousToggleInner}>
-              {anonymousView ? (
-                <UserCircle size={18} color="#FFFFFF" />
-              ) : (
-                <User size={18} color="#FFFFFF" />
+          <View style={styles.searchContainer}>
+            <Animated.View 
+              style={[
+                styles.searchBar,
+                { width: searchBarWidth }
+              ]}
+            >
+              <Search size={18} color="#64748B" />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search by name or specialty..."
+                placeholderTextColor="#94A3B8"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity 
+                  style={styles.clearSearchButton}
+                  onPress={() => setSearchQuery('')}
+                >
+                  <X size={16} color="#94A3B8" />
+                </TouchableOpacity>
               )}
-            </View>
-            <Text style={styles.anonymousToggleText}>
-              {anonymousView ? 'Anonymous' : 'Normal'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-        
-        <Animated.View 
-          style={[
-            styles.searchBarContainer,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY }]
-            }
-          ]}
-        >
-          <View style={styles.searchBar}>
-            <Search size={16} color="#fff" style={styles.searchIcon} />
-            <TextInput
-              placeholder="Search specialists, hospitals..."
-              placeholderTextColor="rgba(255, 255, 255, 0.7)"
-              style={styles.searchInput}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
+            </Animated.View>
+            
+            <Animated.View style={{ opacity: filterButtonOpacity }}>
+              <TouchableOpacity 
+                style={styles.sortButton}
+                onPress={() => setShowSortMenu(true)}
+              >
+                <ArrowUpDown size={18} color="#64748B" />
+              </TouchableOpacity>
+            </Animated.View>
           </View>
-          <TouchableOpacity 
-            style={styles.filterIcon}
-            onPress={() => setSortBy(sortBy === 'followers' ? 'recent' : 'followers')}
-          >
-            <Filter size={16} color="#fff" />
-          </TouchableOpacity>
-        </Animated.View>
+        </View>
       </Animated.View>
+      
+      {/* Filter Tags */}
+      <View style={styles.specialtyContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.specialtyScroll}
+        >
+          {filters.map((filter) => (
+            <SpecialtyTag
+              key={filter}
+              specialty={filter}
+              isSelected={activeFilter === filter}
+              onPress={() => handleFilterPress(filter)}
+            />
+          ))}
+        </ScrollView>
+      </View>
 
+      {/* Sort Menu Overlay */}
+      <SortMenu
+        isVisible={showSortMenu}
+        currentSort={sortBy}
+        onSelect={(sort) => setSortBy(sort)}
+        onDismiss={() => setShowSortMenu(false)}
+      />
+      
+      {/* Error Message */}
       {error && (
         <ErrorMessage 
           message={error} 
@@ -373,151 +619,77 @@ export default function DoctorDirectory() {
         />
       )}
 
-      <Animated.View 
-        style={[
-          styles.filterScrollContainer,
-          {
-            opacity: fadeAnim,
-            transform: [{ scale: scaleAnim }],
-          }
-        ]}
-      >
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.filterScroll}
-          contentContainerStyle={styles.filterContainer}
-        >
-          {filters.map((filter) => (
-            <TouchableOpacity
-              key={filter}
-              style={[
-                styles.filterButton,
-                activeFilter === filter && styles.filterButtonActive
-              ]}
-              onPress={() => setActiveFilter(filter)}
-            >
-              <Text style={[
-                styles.filterButtonText,
-                activeFilter === filter && styles.filterButtonTextActive
-              ]}>{filter}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </Animated.View>
-
-      <Animated.View 
-        style={[
-          styles.contentContainer,
-          { 
-            opacity: fadeAnim,
-            transform: [{ translateY }] 
-          }
-        ]}
-      >
-        <FlatList
-          ListHeaderComponent={
-            <>
-              {/* Profile Completion Banner */}
-              <ProfileCompletionBanner 
-                profileCompletionPercent={profileCompletionPercent}
-                onPress={navigateToProfile}
-              />
-              
-              {anonymousView && (
-                <View style={styles.anonymousModeInfo}>
-                  <View style={styles.anonymousModeIcon}>
-                    <Stethoscope size={20} color="#FFFFFF" />
-                  </View>
-                  <View style={styles.anonymousModeText}>
-                    <Text style={styles.anonymousModeTitle}>Anonymous View</Text>
-                    <Text style={styles.anonymousModeDesc}>All doctors are shown with standard professional avatars</Text>
-                  </View>
-                </View>
-              )}
-            
-              {/* Connection Requests Section */}
-              {receivedRequests.length > 0 && (
-                <View style={styles.requestsSection}>
-                  <Text style={styles.requestsTitle}>Connection Requests</Text>
-                  {receivedRequests.map((request) => (
-                    <ConnectionRequestCard key={request.id} request={request} />
-                  ))}
-                </View>
-              )}
-            </>
-          }
-          data={doctors}
-          renderItem={({ item: doctor }) => (
-            <Link href={`/network/doctor/${doctor.id}`} asChild>
-              <TouchableOpacity style={styles.doctorCard}>
-                <ProfileAvatar 
-                  uri={doctor.avatar_url} 
-                  size={54} 
-                  isAnonymous={anonymousView || doctor.metadata?.isAnonymous === true} 
-                />
-                <View style={styles.doctorInfo}>
-                  <View style={styles.doctorHeader}>
-                    <Text style={styles.doctorName}>{doctor.full_name}</Text>
-                    <View style={styles.verifiedBadge}>
-                      <Text style={styles.verifiedText}>✓</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.doctorSpecialty}>{doctor.specialty}</Text>
-                  <View style={styles.doctorDetailsCompact}>
-                    <View style={styles.detailRow}>
-                      <Building2 size={14} color="#64748b" />
-                      <Text style={styles.detailText}>{doctor.hospital}</Text>
-                    </View>
-                    <View style={styles.detailRowGroup}>
-                      <View style={styles.detailRow}>
-                        <MapPin size={14} color="#64748b" />
-                        <Text style={styles.detailText}>{doctor.location}</Text>
-                      </View>
-                      <View style={styles.dotSeparator} />
-                      <View style={styles.detailRow}>
-                        <Users size={14} color="#64748b" />
-                        <Text style={styles.detailText}>{doctor.followers_count}</Text>
-                      </View>
-                    </View>
-                  </View>
-                </View>
-                <TouchableOpacity 
-                  style={[
-                    styles.followButton,
-                    doctor.connection_status === 'connected' && styles.followingButton,
-                    doctor.connection_status === 'pending' && styles.pendingButton
-                  ]}
-                  onPress={(e) => {
-                    e.preventDefault();
-                    doctor.connection_status === 'connected'
-                      ? unfollowDoctor(doctor.id)
-                      : followDoctor(doctor.id);
-                  }}
-                >
-                  {doctor.connection_status === 'connected' ? (
-                    <UserCheck size={18} color="#0066CC" />
-                  ) : doctor.connection_status === 'pending' ? (
-                    <Text style={styles.pendingText}>Pending</Text>
-                  ) : (
-                    <UserPlus size={18} color="#FFFFFF" />
-                  )}
-                </TouchableOpacity>
-              </TouchableOpacity>
-            </Link>
-          )}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.doctorList}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl 
-              refreshing={refreshing} 
-              onRefresh={onRefresh} 
-              tintColor="#0066CC"
+      {/* Main Content */}
+      <Animated.FlatList
+        data={doctors}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.contentContainer}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        scrollEventThrottle={16}
+        refreshControl={
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh}
+            tintColor="#0284c7"
+          />
+        }
+        ListHeaderComponent={
+          <>
+            {/* Profile Completion Banner */}
+            <ProfileCompletionBanner 
+              profileCompletionPercent={profileCompletionPercent}
+              onPress={handleProfilePress}
             />
-          }
-        />
-      </Animated.View>
+            
+            {/* Connection Requests Section */}
+            {receivedRequests.length > 0 && (
+              <MotiView
+                from={{ opacity: 0, translateY: 10 }}
+                animate={{ opacity: 1, translateY: 0 }}
+                transition={{ type: 'timing', duration: 500, delay: 300 }}
+                style={styles.requestsSection}
+              >
+                <Text style={styles.sectionTitle}>Connection Requests</Text>
+                {receivedRequests.map((request) => (
+                  <ConnectionRequestCard key={request.id} request={request} />
+                ))}
+              </MotiView>
+            )}
+            
+            {/* Directory Heading */}
+            {doctors.length > 0 && (
+              <View style={styles.directoryHeader}>
+                <Text style={styles.sectionTitle}>
+                  {activeFilter === 'All' 
+                    ? 'Medical Professionals' 
+                    : `${activeFilter} Specialists`}
+                </Text>
+                <Text style={styles.resultCount}>
+                  {doctors.length} result{doctors.length !== 1 ? 's' : ''}
+                </Text>
+              </View>
+            )}
+          </>
+        }
+        ListEmptyComponent={
+          isLoading && !refreshing 
+            ? renderSkeleton()
+            : <EmptySearchResults query={searchQuery} filter={activeFilter} />
+        }
+        renderItem={({ item: doctor }) => (
+          <DoctorCard 
+            doctor={doctor} 
+            onConnect={() => doctor.connection_status === 'connected'
+              ? unfollowDoctor(doctor.id)
+              : followDoctor(doctor.id)
+            }
+            onViewProfile={() => handleDoctorCardPress(doctor.id)}
+          />
+        )}
+      />
     </View>
   );
 }
@@ -525,463 +697,426 @@ export default function DoctorDirectory() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#F8FAFC',
   },
-  backgroundContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: Platform.OS === 'ios' ? 160 : 140,
-    zIndex: 0,
-    overflow: 'hidden',
-  },
-  headerGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: '100%',
-  },
-  decorativeCircle1: {
-    position: 'absolute',
-    width: 250,
-    height: 250,
-    borderRadius: 125,
-    backgroundColor: 'rgba(255, 255, 255, 0.07)',
-    top: -100,
-    right: -80,
-  },
-  decorativeCircle2: {
-    position: 'absolute',
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: 'rgba(255, 255, 255, 0.07)',
-    top: 60,
-    left: -60,
-  },
-  decorativeLine: {
-    position: 'absolute',
-    width: 100,
-    height: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    bottom: 35,
-    right: 40,
-    transform: [{ rotate: '30deg' }],
-  },
-  animatedHeader: {
-    width: '100%',
-    paddingTop: Platform.OS === 'ios' ? 47 : 27,
-    paddingHorizontal: 16,
-    zIndex: 2,
-  },
-  headerTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    paddingBottom: 8,
-  },
-  logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingBottom: 8,
-  },
-  iconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#4e87cb',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
+  header: {
+    backgroundColor: '#FFFFFF',
+    paddingTop: Platform.OS === 'ios' ? 50 : 30,
+    paddingBottom: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 5,
+    zIndex: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
-  titleFade: {
-    opacity: 0,
-    transform: [{ translateY: 20 }],
+  headerInner: {
+    paddingHorizontal: 16,
   },
-  logo: {
-    fontSize: 20,
-    fontFamily: 'Inter_700Bold',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-    textShadowColor: 'rgba(0, 0, 0, 0.1)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  searchBarContainer: {
+  headerTop: {
     flexDirection: 'row',
-    marginTop: 6,
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 12,
-    gap: 8,
   },
-  searchBar: {
-    flex: 1,
+  titleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.17)',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
+    gap: 8,
   },
-  searchIcon: {
-    marginRight: 8,
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 12,
+    height: 42,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   searchInput: {
     flex: 1,
-    height: 22,
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
+    fontSize: 15,
+    marginLeft: 8,
+    color: '#1E293B',
   },
-  filterIcon: {
-    width: 38,
-    height: 38,
+  clearSearchButton: {
+    padding: 5,
+  },
+  sortButton: {
+    width: 42,
+    height: 42,
     borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.17)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
+    backgroundColor: '#F1F5F9',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  filterScrollContainer: {
-    marginTop: Platform.OS === 'ios' ? 106 : 96,
-    paddingBottom: 8,
+  specialtyContainer: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 3,
-    zIndex: 1,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    zIndex: 5,
   },
-  filterScroll: {
-    paddingVertical: 12,
-  },
-  filterContainer: {
+  specialtyScroll: {
     paddingHorizontal: 16,
     gap: 8,
     flexDirection: 'row',
   },
-  filterButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+  specialtyTag: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: 'rgba(0, 102, 204, 0.06)',
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
-    borderColor: 'rgba(0, 102, 204, 0.12)',
+    borderColor: '#E2E8F0',
   },
-  filterButtonActive: {
-    backgroundColor: '#0066CC',
+  specialtyTagSelected: {
+    backgroundColor: '#0284c7',
+    borderColor: '#0284c7',
   },
-  filterButtonText: {
+  specialtyTagText: {
     fontSize: 13,
-    fontFamily: 'Inter_500Medium',
-    color: '#0066CC',
+    fontWeight: '500',
+    color: '#64748B',
   },
-  filterButtonTextActive: {
+  specialtyTagTextSelected: {
     color: '#FFFFFF',
   },
   contentContainer: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
+    padding: 16,
+    paddingTop: 8,
   },
-  // Profile Completion Banner Styles
-  completionBanner: {
+  directoryHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  resultCount: {
+    fontSize: 14,
+    color: '#64748B',
+  },
+  doctorCard: {
+    flexDirection: 'row',
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 16,
-    marginHorizontal: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 149, 0, 0.3)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
-  completionIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 149, 0, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
+  doctorCardPressed: {
+    backgroundColor: '#F8FAFC',
   },
-  completionTextContainer: {
-    flex: 1,
-  },
-  completionTitle: {
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
-    color: '#1E293B',
-    marginBottom: 4,
-  },
-  criticalTitle: {
-    color: '#FF3B30',
-  },
-  completionDesc: {
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    color: '#64748B',
-  },
-  completionProgressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  completionPercent: {
-    fontSize: 14,
-    fontFamily: 'Inter_700Bold',
-    color: '#FF9500',
-    marginRight: 4,
-  },
-  requestsSection: {
-    marginHorizontal: 16,
-    marginVertical: 12,
-    padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+  avatarContainer: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.1,
     shadowRadius: 3,
-    elevation: 2,
-  },
-  requestsTitle: {
-    fontSize: 17,
-    fontFamily: 'Inter_600SemiBold',
-    color: '#1A1A1A',
-    marginBottom: 10,
-  },
-  doctorList: {
-    padding: 16,
-    paddingTop: 8,
-    gap: 10,
-  },
-  doctorCard: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 14,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
     elevation: 3,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 102, 204, 0.05)',
   },
   doctorAvatar: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    marginRight: 12,
     borderWidth: 2,
-    borderColor: 'rgba(0, 102, 204, 0.2)',
+    borderColor: '#FFFFFF',
   },
-  doctorInfo: {
+  avatarPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  doctorCardContent: {
     flex: 1,
+    marginLeft: 16,
   },
-  doctorHeader: {
+  doctorCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 3,
+    marginBottom: 4,
   },
   doctorName: {
-    fontSize: 15,
-    fontFamily: 'Inter_600SemiBold',
-    color: '#1e293b',
-    marginRight: 4,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0F172A',
+    marginRight: 6,
+    flex: 1,
   },
   verifiedBadge: {
-    backgroundColor: '#0066CC',
+    width: 16,
+    height: 16,
     borderRadius: 8,
-    width: 14,
-    height: 14,
-    alignItems: 'center',
+    backgroundColor: '#0284c7',
     justifyContent: 'center',
+    alignItems: 'center',
   },
   verifiedText: {
-    color: '#FFFFFF',
-    fontSize: 8,
+    color: 'white',
+    fontSize: 10,
     fontWeight: 'bold',
   },
-  doctorSpecialty: {
+  specialtyRow: {
+    flexDirection: 'row',
+    marginBottom: 10,
+  },
+  specialtyBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: 'rgba(2, 132, 199, 0.1)',
+  },
+  specialtyText: {
     fontSize: 13,
-    color: '#0066CC',
-    fontFamily: 'Inter_500Medium',
-    marginBottom: 6,
+    fontWeight: '500',
+    color: '#0284c7',
   },
-  doctorDetails: {
-    gap: 6,
+  doctorDetailsRow: {
+    marginBottom: 12,
+    gap: 8,
   },
-  doctorDetailsCompact: {
-    gap: 4,
-  },
-  detailRow: {
+  detailItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-  },
-  detailRowGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  dotSeparator: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#cbd5e1',
-    marginHorizontal: 6,
   },
   detailText: {
     fontSize: 13,
-    color: '#64748b',
-    fontFamily: 'Inter_400Regular',
+    color: '#64748B',
+    flex: 1,
   },
-  followButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#0066CC',
+  statsRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statCount: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
+    marginRight: 3,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  dotDivider: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: '#CBD5E1',
+    marginHorizontal: 10,
+  },
+  connectButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#0284c7',
     justifyContent: 'center',
-    marginLeft: 10,
-    shadowColor: '#0066CC',
+    alignItems: 'center',
+    shadowColor: '#0284c7',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 3,
+    marginLeft: 12,
   },
-  followingButton: {
-    backgroundColor: '#E5F0FF',
+  connectedButton: {
+    backgroundColor: '#F0F9FF',
     borderWidth: 1,
-    borderColor: 'rgba(0, 102, 204, 0.3)',
+    borderColor: '#0284c7',
   },
   pendingButton: {
-    backgroundColor: '#F0F2F5',
+    backgroundColor: '#F8FAFC',
     width: 'auto',
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
   },
-  pendingText: {
+  pendingButtonText: {
     fontSize: 11,
-    fontFamily: 'Inter_500Medium',
-    color: '#64748b',
+    fontWeight: '500',
+    color: '#64748B',
   },
-  avatarPlaceholder: {
-    backgroundColor: '#FFFFFF', 
-    borderWidth: 3,
-    borderColor: '#0066CC',
-    shadowColor: '#0066CC',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  anonymousAvatarPlaceholder: {
-    backgroundColor: '#FFFFFF', 
-    borderWidth: 3,
-    borderColor: '#0066CC',
-    shadowColor: '#0066CC',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  anonymousAvatarInner: {
-    width: '75%',
-    height: '75%', 
-    borderRadius: 100,
-    backgroundColor: 'rgba(0, 102, 204, 0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  anonymousToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.17)',
-    borderRadius: 8,
-  },
-  anonymousToggleInner: {
-    width: 24,
-    height: 24,
+  completionBanner: {
+    backgroundColor: '#FFFBEB',
     borderRadius: 12,
-    backgroundColor: 'rgba(0, 102, 204, 0.05)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  anonymousToggleText: {
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
-    color: '#FFFFFF',
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FEF3C7',
   },
   criticalBanner: {
-    backgroundColor: 'rgba(255, 59, 48, 0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 59, 48, 0.3)',
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FEE2E2',
   },
-  anonymousModeInfo: {
+  completionTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#FFFFFF',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  completionIconContainer: {
+    width: 28,
+    height: 28,
     borderRadius: 14,
-    marginBottom: 16,
-    marginHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  anonymousModeIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0, 102, 204, 0.05)',
-    alignItems: 'center',
+    backgroundColor: 'rgba(255, 149, 0, 0.1)',
     justifyContent: 'center',
-    marginRight: 16,
+    alignItems: 'center',
+    marginRight: 8,
   },
-  anonymousModeText: {
+  completionTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#92400E',
     flex: 1,
   },
-  anonymousModeTitle: {
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
-    color: '#1E293B',
-    marginBottom: 4,
+  criticalTitle: {
+    color: '#B91C1C',
   },
-  anonymousModeDesc: {
+  completionDesc: {
     fontSize: 14,
-    fontFamily: 'Inter_400Regular',
+    color: '#78716C',
+    marginBottom: 12,
+  },
+  progressBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  progressBarBackground: {
+    flex: 1,
+    height: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: 6,
+    backgroundColor: '#F59E0B',
+    borderRadius: 3,
+  },
+  criticalProgressFill: {
+    backgroundColor: '#EF4444',
+  },
+  completionPercent: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#92400E',
+  },
+  requestsSection: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  sortMenuContainer: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 140 : 120,
+    right: 16,
+    zIndex: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  sortMenu: {
+    width: 200,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  sortMenuHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  sortMenuTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  sortOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 10,
+  },
+  sortOptionSelected: {
+    backgroundColor: '#F0F9FF',
+  },
+  sortOptionText: {
+    fontSize: 14,
     color: '#64748B',
+    flex: 1,
+  },
+  sortOptionTextSelected: {
+    color: '#0284c7',
+    fontWeight: '500',
+  },
+  sortCheckmark: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#0284c7',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyStateContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    marginTop: 20,
+  },
+  emptyStateTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#0F172A',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyStateMessage: {
+    fontSize: 14,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });

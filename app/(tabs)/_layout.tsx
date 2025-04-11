@@ -43,8 +43,8 @@ export default function TabLayout() {
       pathname === '/home/index' || 
       pathname === '/network' || 
       pathname === '/network/index' || 
-      pathname === '/discussions' || 
-      pathname === '/discussions/index';
+      pathname === '/chat' || 
+      pathname === '/chat/index';
     
     return isMainTabScreen;
   };
@@ -248,20 +248,19 @@ const styles = StyleSheet.create({
     right: 16,
     left: undefined,
     width: 'auto',
-    zIndex: 2000,
   },
   headerIconsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    paddingTop: Platform.OS === 'ios' ? 46 : StatusBar.currentHeight || 24,
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingRight: 16,
-    paddingBottom: 8,
+    paddingBottom: 10,
+    paddingLeft: 16,
   },
   headerIconsContainerHome: {
-    paddingTop: 0,
+    paddingTop: 6,
     paddingRight: 0,
-    paddingBottom: 0,
   },
   createTabIcon: {
     width: 36,

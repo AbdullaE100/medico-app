@@ -322,43 +322,23 @@ export const useDiscussionsStore = create<DiscussionsState>((set, get) => ({
   },
 
   voteDiscussion: async (id, voteType) => {
+    set({ isLoading: true, error: null });
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      const { data: existingVote } = await supabase
+      const { error } = await supabase
         .from('discussion_votes')
-        .select('vote_type')
-        .eq('discussion_id', id)
-        .eq('user_id', user.id)
-        .single();
-
-      if (existingVote) {
-        if (existingVote.vote_type === voteType) {
-          // Remove vote
-          await supabase
-            .from('discussion_votes')
-            .delete()
-            .eq('discussion_id', id)
-            .eq('user_id', user.id);
-        } else {
-          // Change vote
-          await supabase
-            .from('discussion_votes')
-            .update({ vote_type: voteType })
-            .eq('discussion_id', id)
-            .eq('user_id', user.id);
-        }
-      } else {
-        // Add new vote
-        await supabase
-          .from('discussion_votes')
-          .insert({
+        .upsert(
+          {
             discussion_id: id,
             user_id: user.id,
             vote_type: voteType
-          });
-      }
+          },
+          { onConflict: 'discussion_id,user_id' }
+        );
+
+      if (error) throw error;
 
       // Optimistic update
       set(state => ({
@@ -389,6 +369,7 @@ export const useDiscussionsStore = create<DiscussionsState>((set, get) => ({
   },
 
   bookmarkDiscussion: async (id) => {
+    set({ isLoading: true, error: null });
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
@@ -417,6 +398,7 @@ export const useDiscussionsStore = create<DiscussionsState>((set, get) => ({
   },
 
   unbookmarkDiscussion: async (id) => {
+    set({ isLoading: true, error: null });
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');

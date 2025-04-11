@@ -34,7 +34,7 @@ export default function ForumLayout() {
         name="index" 
         options={{ 
           title: 'Medical Forum',
-          headerShown: true 
+          headerShown: false
         }} 
       />
       <Stack.Screen 

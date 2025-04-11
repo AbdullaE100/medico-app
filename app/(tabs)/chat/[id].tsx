@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, TextInput, Pressable, KeyboardAvoidingView, Platform, ActivityIndicator, ActionSheetIOS, Alert } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
-import { Image as ImageIcon, File, Send, Paperclip, X } from 'lucide-react-native';
+import { View, Text, StyleSheet, FlatList, Image, TextInput, Pressable, KeyboardAvoidingView, Platform, ActivityIndicator, ActionSheetIOS, Alert, TouchableOpacity, StatusBar } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Image as ImageIcon, File, Send, Paperclip, X, ArrowLeft, Info, User, MessageCircle } from 'lucide-react-native';
 import { useChatStore } from '@/stores/useChatStore';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { supabase } from '@/lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import { LinearGradient } from 'expo-linear-gradient';
 
 // Custom base64 to ArrayBuffer conversion since we're having issues with the package
 const base64ToArrayBuffer = (base64: string) => {
@@ -75,7 +76,7 @@ const MessageBubble = ({ message, isCurrentUser }: {
       )}
       {message.type === 'file' && message.file_url && (
         <View style={styles.documentAttachment}>
-          <File size={24} color="#0066CC" />
+          <File size={22} color="#0066CC" />
           <Text style={styles.documentName}>{message.file_name}</Text>
         </View>
       )}
@@ -91,6 +92,7 @@ const MessageBubble = ({ message, isCurrentUser }: {
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams();
+  const router = useRouter();
   const [newMessage, setNewMessage] = useState('');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
@@ -114,6 +116,8 @@ export default function ChatScreen() {
     cleanup
   } = useChatStore();
 
+  const scrollViewRef = useRef<FlatList>(null);
+
   useEffect(() => {
     // Get current user ID
     const getCurrentUser = async () => {
@@ -134,6 +138,15 @@ export default function ChatScreen() {
     // Cleanup on unmount
     return () => cleanup();
   }, [id]);
+
+  useEffect(() => {
+    // Scroll to bottom when new messages arrive
+    if (scrollViewRef.current && messages.length > 0) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [messages.length]);
 
   const handleAttachmentPress = () => {
     if (Platform.OS === 'ios') {
@@ -360,105 +373,152 @@ export default function ChatScreen() {
   };
 
   if (isLoading && messages.length === 0) {
-    return <LoadingOverlay message="Loading messages..." />;
+    return <LoadingOverlay message="Loading conversation..." />;
   }
 
   return (
     <KeyboardAvoidingView 
-      style={styles.container} 
+      style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
     >
+      <StatusBar barStyle="light-content" />
+      
+      {/* Enhanced Header with Avatar */}
+      <View style={styles.header}>
+        <LinearGradient
+          colors={['#0066CC', '#0091FF']}
+          style={styles.headerGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <View style={styles.headerContent}>
+            <TouchableOpacity 
+              style={styles.backButton}
+              onPress={() => router.back()}
+            >
+              <ArrowLeft size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+            
+            <View style={styles.headerProfile}>
+              {currentChat?.other_user?.avatar_url ? (
+                <Image 
+                  source={{ uri: currentChat.other_user.avatar_url }} 
+                  style={styles.headerAvatar} 
+                />
+              ) : (
+                <View style={styles.headerAvatarPlaceholder}>
+                  <User size={18} color="#FFFFFF" />
+                </View>
+              )}
+              
+              <View style={styles.headerText}>
+                <Text style={styles.headerName}>
+                  {currentChat?.other_user?.full_name || 'Chat'}
+                </Text>
+                <Text style={styles.headerStatus}>
+                  {currentChat?.other_user?.is_online ? 'Online' : 'Offline'}
+                </Text>
+              </View>
+            </View>
+            
+            <TouchableOpacity style={styles.headerButton}>
+              <Info size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+      </View>
+      
       {error && (
         <ErrorMessage 
-          message={error} 
+          message={error}
           onDismiss={() => useChatStore.setState({ error: null })}
         />
       )}
-
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <Image
-            source={{ 
-              uri: currentChat?.other_user?.avatar_url || 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400'
-            }}
-            style={styles.headerAvatar}
-          />
-          <View style={styles.headerInfo}>
-            <Text style={styles.headerName}>
-              {currentChat?.other_user?.full_name || 'Loading...'}
-            </Text>
-            <Text style={styles.headerSpecialty}>
-              {currentChat?.other_user?.specialty || 'Doctor'}
-            </Text>
+      
+      {isLoading && messages.length === 0 ? (
+        <LoadingOverlay message="Loading conversation..." />
+      ) : (
+        <FlatList
+          data={messages}
+          renderItem={({ item }) => (
+            <MessageBubble 
+              message={item} 
+              isCurrentUser={item.sender_id === currentUserId}
+            />
+          )}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.messagesList}
+          inverted
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyConversation}>
+              <View style={styles.emptyIconContainer}>
+                <MessageCircle size={32} color="#0066CC" />
+              </View>
+              <Text style={styles.emptyTitle}>No messages yet</Text>
+              <Text style={styles.emptySubtitle}>Send your first message below</Text>
+            </View>
+          }
+        />
+      )}
+      
+      {/* Media Preview */}
+      {selectedMedia && (
+        <View style={styles.mediaPreviewContainer}>
+          <View style={styles.mediaPreview}>
+            {selectedMedia.type === 'image' ? (
+              <Image source={{ uri: selectedMedia.uri }} style={styles.mediaPreviewImage} />
+            ) : (
+              <View style={styles.filePreview}>
+                <File size={22} color="#0066CC" />
+                <Text style={styles.filePreviewName} numberOfLines={1}>
+                  {selectedMedia.name || 'File'}
+                </Text>
+              </View>
+            )}
+            <TouchableOpacity 
+              style={styles.mediaPreviewCancel}
+              onPress={cancelSelectedMedia}
+            >
+              <X size={18} color="#FFFFFF" />
+            </TouchableOpacity>
           </View>
         </View>
-      </View>
-
-      <FlatList
-        data={messages}
-        renderItem={({ item }) => (
-          <MessageBubble 
-            message={item} 
-            isCurrentUser={item.sender_id === currentUserId}
-          />
-        )}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.messageList}
-        showsVerticalScrollIndicator={false}
-        inverted
-      />
-
-      {selectedMedia && (
-        <View style={styles.selectedMediaContainer}>
-          {selectedMedia.type === 'image' ? (
-            <View style={styles.selectedImageContainer}>
-              <Image source={{ uri: selectedMedia.uri }} style={styles.selectedImage} />
-              <Pressable style={styles.cancelButton} onPress={cancelSelectedMedia}>
-                <X size={18} color="#FFF" />
-              </Pressable>
-            </View>
-          ) : (
-            <View style={styles.selectedFileContainer}>
-              <File size={24} color="#0066CC" />
-              <Text style={styles.selectedFileName} numberOfLines={1} ellipsizeMode="middle">
-                {selectedMedia.name || 'Document'}
-              </Text>
-              <Pressable style={styles.cancelButton} onPress={cancelSelectedMedia}>
-                <X size={18} color="#FFF" />
-              </Pressable>
-            </View>
-          )}
-        </View>
       )}
-
+      
+      {/* Enhanced Input Area */}
       <View style={styles.inputContainer}>
-        <Pressable style={styles.attachButton} onPress={handleAttachmentPress}>
-          <Paperclip size={24} color="#666666" />
-        </Pressable>
+        <TouchableOpacity 
+          style={styles.attachmentButton}
+          onPress={handleAttachmentPress}
+        >
+          <Paperclip size={20} color="#0066CC" />
+        </TouchableOpacity>
+        
         <TextInput
           style={styles.input}
-          placeholder="Type a message..."
           value={newMessage}
           onChangeText={setNewMessage}
+          placeholder="Type a message..."
+          placeholderTextColor="#94A3B8"
           multiline
-          placeholderTextColor="#666666"
-          onSubmitEditing={handleSend}
         />
-        <Pressable 
+        
+        <TouchableOpacity 
           style={[
             styles.sendButton,
             (!newMessage.trim() && !selectedMedia) && styles.sendButtonDisabled
-          ]} 
+          ]}
           onPress={handleSend}
           disabled={(!newMessage.trim() && !selectedMedia) || isSending}
         >
           {isSending ? (
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
-            <Send size={20} color="#FFFFFF" />
+            <Send size={18} color="#FFFFFF" />
           )}
-        </Pressable>
+        </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
   );
@@ -467,202 +527,293 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F8FAFC',
   },
   header: {
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
-    padding: 16,
+    width: '100%',
+    overflow: 'hidden',
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  headerGradient: {
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingBottom: 12,
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+  },
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerProfile: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 12,
   },
   headerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
-  headerInfo: {
-    flex: 1,
+  headerAvatarPlaceholder: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  headerText: {
+    marginLeft: 10,
   },
   headerName: {
     fontSize: 16,
     fontFamily: 'Inter_600SemiBold',
-    color: '#1A1A1A',
+    color: '#FFFFFF',
   },
-  headerSpecialty: {
-    fontSize: 14,
+  headerStatus: {
+    fontSize: 12,
     fontFamily: 'Inter_400Regular',
-    color: '#666666',
+    color: 'rgba(255, 255, 255, 0.7)',
   },
-  messageList: {
-    padding: 16,
-    gap: 16,
+  headerButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  messagesList: {
+    paddingHorizontal: 12,
+    paddingBottom: 20,
   },
   messageBubble: {
     flexDirection: 'row',
-    marginBottom: 12,
+    marginVertical: 4,
     maxWidth: '85%',
-    alignSelf: 'flex-start',
   },
   currentUserBubble: {
     alignSelf: 'flex-end',
+    marginLeft: 40,
   },
   otherUserBubble: {
     alignSelf: 'flex-start',
+    marginRight: 40,
   },
   messageBubbleAvatar: {
     width: 32,
     height: 32,
     borderRadius: 16,
     marginRight: 8,
+    alignSelf: 'flex-end',
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 102, 204, 0.1)',
   },
   messageContent: {
     borderRadius: 16,
-    padding: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   currentUserContent: {
     backgroundColor: '#0066CC',
+    borderBottomRightRadius: 4,
   },
   otherUserContent: {
-    backgroundColor: '#F0F2F5',
+    backgroundColor: '#FFFFFF',
+    borderBottomLeftRadius: 4,
   },
   senderName: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: 'Inter_600SemiBold',
-    color: '#666666',
+    color: '#0066CC',
     marginBottom: 4,
   },
+  attachmentImage: {
+    width: 200,
+    height: 150,
+    borderRadius: 8,
+    marginBottom: 6,
+  },
+  documentAttachment: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 102, 204, 0.06)',
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 6,
+  },
+  documentName: {
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+    color: '#0066CC',
+    marginLeft: 8,
+    flex: 1,
+  },
   messageText: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: 'Inter_400Regular',
-    marginBottom: 4,
+    lineHeight: 20,
   },
   currentUserText: {
     color: '#FFFFFF',
   },
   otherUserText: {
-    color: '#1A1A1A',
+    color: '#1E293B',
   },
   messageTime: {
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: 'Inter_400Regular',
-    color: '#999999',
+    color: 'rgba(255, 255, 255, 0.7)',
     alignSelf: 'flex-end',
+    marginTop: 4,
   },
-  attachment: {
+  emptyConversation: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 80,
+    padding: 20,
+  },
+  emptyIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(0, 102, 204, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#1E293B',
     marginBottom: 8,
   },
-  attachmentImage: {
-    width: '100%',
-    height: 200,
-    borderRadius: 8,
-    marginBottom: 8,
+  emptySubtitle: {
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    color: '#64748B',
+    textAlign: 'center',
   },
-  documentAttachment: {
+  mediaPreviewContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+  },
+  mediaPreview: {
+    position: 'relative',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0F2F5',
-    padding: 8,
-    borderRadius: 8,
-    gap: 8,
-    marginBottom: 8,
   },
-  documentName: {
-    fontSize: 12,
-    fontFamily: 'Inter_400Regular',
-    color: '#1A1A1A',
+  mediaPreviewImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 6,
+  },
+  filePreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 102, 204, 0.08)',
+    borderRadius: 6,
+    padding: 10,
+    paddingRight: 16,
+  },
+  filePreviewName: {
+    fontSize: 14,
+    fontFamily: 'Inter_500Medium',
+    color: '#0066CC',
+    marginLeft: 8,
+    maxWidth: 240,
+  },
+  mediaPreviewCancel: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FF3B30',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1,
+    elevation: 2,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: '#E5E5E5',
-    gap: 12,
+    borderTopColor: '#F1F5F9',
   },
-  attachButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F0F2F5',
+  attachmentButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(0, 102, 204, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 8,
   },
   input: {
     flex: 1,
-    backgroundColor: '#F0F2F5',
-    borderRadius: 22,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    maxHeight: 100,
-    fontSize: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 20,
+    fontSize: 15,
     fontFamily: 'Inter_400Regular',
+    color: '#1E293B',
+    maxHeight: 100,
   },
   sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: '#0066CC',
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 8,
+    shadowColor: '#0066CC',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
   },
   sendButtonDisabled: {
-    backgroundColor: '#E5E5E5',
-  },
-  document: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0F2F5',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 8,
-    marginBottom: 8,
-  },
-  selectedMediaContainer: {
-    padding: 12,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E5E5',
-  },
-  selectedImageContainer: {
-    position: 'relative',
-    borderRadius: 12,
-    overflow: 'hidden',
-    height: 120,
-  },
-  selectedImage: {
-    width: '100%',
-    height: '100%',
-  },
-  selectedFileContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    backgroundColor: '#F0F2F5',
-    borderRadius: 12,
-    gap: 8,
-  },
-  selectedFileName: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    color: '#1A1A1A',
-  },
-  cancelButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#94A3B8',
+    shadowOpacity: 0,
+    elevation: 0,
   },
 });

@@ -11,7 +11,8 @@ import {
   RefreshControl,
   TouchableOpacity,
   Animated,
-  Dimensions
+  Dimensions,
+  Platform
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { 
@@ -197,30 +198,47 @@ const TopicPill = ({ category, onPress, isSelected }: {
 );
 
 // Trending Topic Card for horizontal scrolling row
-const TrendingTopicCard = ({ category, onPress }: { category: any, onPress: () => void }) => (
-  <TouchableOpacity 
-    style={styles.trendingTopicCard} 
-    onPress={onPress}
-    activeOpacity={0.8}
-  >
-    <LinearGradient
-      colors={['rgba(0, 102, 204, 0.1)', 'rgba(0, 145, 255, 0.15)']}
-      style={styles.trendingTopicGradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+const TrendingTopicCard = ({ category, onPress }: { category: any, onPress: () => void }) => {
+  // Generate a consistent pseudo-random pastel color based on category name
+  const getBackgroundGradient = (name: string): readonly [string, string] => {
+    const seed = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const hue = seed % 360;
+    return [
+      `hsla(${hue}, 85%, 95%, 1.0)`,
+      `hsla(${hue}, 90%, 90%, 1.0)`
+    ] as const;
+  };
+  
+  return (
+    <TouchableOpacity 
+      style={styles.trendingTopicCard} 
+      onPress={onPress}
+      activeOpacity={0.7}
     >
-      <View style={styles.trendingTopicContent}>
-        <Text style={styles.trendingTopicName}>{category.name}</Text>
-        <View style={styles.trendingTopicMeta}>
-          <MessageCircle size={12} color="#0066CC" />
-          <Text style={styles.trendingTopicStat}>
-            {(category as any).posts_count || Math.floor(Math.random() * 100)} posts
-          </Text>
+      <LinearGradient
+        colors={getBackgroundGradient(category.name)}
+        style={styles.trendingTopicGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <View style={styles.trendingTopicContent}>
+          <View style={styles.trendingTopicHeader}>
+            <View style={styles.topicIconContainer}>
+              <Hash size={16} color="#0066CC" />
+            </View>
+            <Text style={styles.trendingTopicName} numberOfLines={2}>{category.name}</Text>
+          </View>
+          <View style={styles.trendingTopicMeta}>
+            <MessageCircle size={12} color="#0066CC" />
+            <Text style={styles.trendingTopicStat}>
+              {(category as any).posts_count || Math.floor(Math.random() * 100)} posts
+            </Text>
+          </View>
         </View>
-      </View>
-    </LinearGradient>
-  </TouchableOpacity>
-);
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+};
 
 export default function ForumHome() {
   const router = useRouter();
@@ -298,12 +316,12 @@ export default function ForumHome() {
   // Header animations
   const headerHeight = scrollY.interpolate({
     inputRange: [0, 120],
-    outputRange: [200, 60],
+    outputRange: [320, 60],
     extrapolate: 'clamp'
   });
 
   const headerOpacity = scrollY.interpolate({
-    inputRange: [0, 100],
+    inputRange: [0, 70],
     outputRange: [1, 0],
     extrapolate: 'clamp'
   });
@@ -320,8 +338,7 @@ export default function ForumHome() {
 
   // Get trending categories (categories with most posts)
   const trendingCategories = [...(categories || [])]
-    .sort((a, b) => ((b as any).posts_count || 0) - ((a as any).posts_count || 0))
-    .slice(0, 6);
+    .slice(0, 10); // Show more categories to make scrolling evident
 
   return (
     <View style={styles.container}>
@@ -368,8 +385,8 @@ export default function ForumHome() {
           </Animated.View>
         )}
 
-        {/* Trending Topics Section */}
-        <Animated.View style={[styles.trendingSection, { opacity: headerOpacity }]}>
+        {/* Trending Topics Section - Fixed to always be visible */}
+        <View style={styles.trendingSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Trending Topics</Text>
             <TouchableOpacity 
@@ -384,8 +401,10 @@ export default function ForumHome() {
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.trendingScrollContent}
+            decelerationRate="fast"
+            snapToAlignment="start"
           >
-            {trendingCategories.map((category) => (
+            {categories.map((category) => (
               <TrendingTopicCard
                 key={category.id}
                 category={category}
@@ -393,7 +412,7 @@ export default function ForumHome() {
               />
             ))}
           </ScrollView>
-        </Animated.View>
+        </View>
       </Animated.View>
 
       {/* Tabs Row */}
@@ -430,6 +449,7 @@ export default function ForumHome() {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.topicsScrollContent}
+          decelerationRate="fast"
         >
           <TopicPill
             category={{ name: 'All Topics' }}
@@ -515,73 +535,82 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    overflow: 'hidden',
     borderBottomWidth: 1,
     borderBottomColor: '#EEEEEE',
-    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 3,
   },
   headerTop: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: Platform.OS === 'ios' ? 60 : 30,
+    marginBottom: 16,
   },
   title: {
-    fontSize: 24,
-    fontFamily: 'Inter_700Bold',
-    color: '#1A1A1A',
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#111111',
+    letterSpacing: -0.5,
   },
   headerControls: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: 'rgba(0, 0, 0, 0.03)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 8,
+    marginLeft: 10,
   },
   searchContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingBottom: 12,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F0F2F5',
     borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 44,
+    paddingHorizontal: 16,
+    height: 48,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
     fontFamily: 'Inter_400Regular',
-    marginLeft: 8,
+    marginLeft: 12,
     color: '#1A1A1A',
+    height: 48,
   },
   trendingSection: {
-    paddingHorizontal: 16,
-    marginTop: 8,
+    marginTop: 10,
+    marginBottom: 10,
+    paddingHorizontal: 20,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 14,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 20,
     fontFamily: 'Inter_600SemiBold',
-    color: '#1A1A1A',
+    color: '#111111',
   },
   seeAllButton: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: 'rgba(0, 102, 204, 0.06)',
+    borderRadius: 16,
   },
   seeAllText: {
     fontSize: 14,
@@ -589,53 +618,100 @@ const styles = StyleSheet.create({
     color: '#0066CC',
   },
   trendingScrollContent: {
-    paddingBottom: 12,
-    paddingRight: 16,
+    paddingBottom: 18,
+    paddingRight: 10,
   },
   trendingTopicCard: {
-    marginRight: 12,
-    borderRadius: 12,
+    marginRight: 14,
+    borderRadius: 16,
     overflow: 'hidden',
-    width: 140,
+    width: 145,
+    height: 110,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+    backgroundColor: '#FFF',
   },
   trendingTopicGradient: {
-    padding: 12,
-    height: 80,
+    padding: 14,
+    height: '100%',
     justifyContent: 'space-between',
   },
   trendingTopicContent: {
     justifyContent: 'space-between',
     height: '100%',
   },
+  trendingTopicHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  topicIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  trendingTopicIcon: {
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    padding: 4,
+    borderRadius: 12,
+    marginRight: 6,
+    marginTop: 2,
+  },
   trendingTopicName: {
-    fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
+    fontSize: 16,
+    fontFamily: 'Inter_700Bold',
     color: '#1A1A1A',
+    flex: 1,
+    lineHeight: 22,
   },
   trendingTopicMeta: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    alignSelf: 'flex-start',
+    marginTop: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   trendingTopicStat: {
     fontSize: 12,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'Inter_600SemiBold',
     color: '#0066CC',
-    marginLeft: 4,
+    marginLeft: 6,
   },
   tabsContainer: {
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#EEEEEE',
+    elevation: 1,
+    paddingTop: 4,
   },
   tabsScrollContent: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
   },
   tab: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 16,
-    marginHorizontal: 4,
+    marginHorizontal: 8,
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },
@@ -643,10 +719,10 @@ const styles = StyleSheet.create({
     borderBottomColor: '#0066CC',
   },
   tabText: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: 'Inter_500Medium',
     color: '#666666',
-    marginLeft: 6,
+    marginLeft: 8,
   },
   activeTabText: {
     color: '#0066CC',
@@ -654,25 +730,34 @@ const styles = StyleSheet.create({
   },
   topicsContainer: {
     backgroundColor: '#FFFFFF',
+    paddingVertical: 14,
+    marginBottom: 2,
     borderBottomWidth: 1,
     borderBottomColor: '#EEEEEE',
-    paddingVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 1,
+    elevation: 1,
   },
   topicsScrollContent: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
   },
   topicPill: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
     backgroundColor: '#F0F2F5',
-    marginHorizontal: 4,
+    marginHorizontal: 6,
+    borderWidth: 1,
+    borderColor: '#F0F2F5',
   },
   selectedTopicPill: {
-    backgroundColor: 'rgba(0, 102, 204, 0.1)',
+    backgroundColor: 'rgba(0, 102, 204, 0.08)',
+    borderColor: 'rgba(0, 102, 204, 0.2)',
   },
   topicPillText: {
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: 'Inter_500Medium',
     color: '#333333',
   },

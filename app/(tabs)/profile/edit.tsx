@@ -115,11 +115,6 @@ export default function EditProfile() {
         return;
       }
       
-      if (!localProfile.avatar_url) {
-        Alert.alert('Profile Image Required', 'Please add a profile image to be visible in the doctor network.');
-        return;
-      }
-      
       setSaveLoading(true);
       
       // Create a profile update with only the fields that definitely exist in the database
@@ -318,6 +313,7 @@ export default function EditProfile() {
           <ArrowLeft size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Edit Profile</Text>
+        <View style={{width: 40}} />
       </View>
       
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -333,61 +329,57 @@ export default function EditProfile() {
               <Text style={styles.changeAvatarText}>Change Photo</Text>
             </TouchableOpacity>
           </View>
-          <View style={styles.requiredPhotoNote}>
-            <Text style={styles.requiredBadge}>Required</Text>
-            <Text style={styles.photoHelperText}>Profile photo is required to appear in the network</Text>
-          </View>
         </View>
         
-        {/* Anonymous Profile Option */}
-        <View style={styles.anonymousSection}>
-          <View style={styles.anonymousHeader}>
-            <UserCircle size={20} color="#0066CC" />
-            <Text style={styles.anonymousSectionTitle}>Anonymous Profile</Text>
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeader}>
+            <UserCircle size={22} color="#0066CC" />
+            <Text style={styles.sectionTitle}>Anonymous Profile</Text>
           </View>
           
-          <Text style={styles.anonymousDescription}>
+          <Text style={styles.sectionDescription}>
             When enabled, your posts will display with a professional anonymous avatar instead of your personal photo.
           </Text>
           
-          <View style={styles.anonymousOption}>
+          <View style={styles.optionCard}>
             <View style={styles.anonymousPreview}>
               <View style={styles.anonymousAvatar}>
-                <View style={styles.anonymousAvatarInner}>
-                  <Stethoscope size={22} color="#FFFFFF" />
-                </View>
+                <Stethoscope size={20} color="#FFFFFF" />
               </View>
               <Text style={styles.anonymousLabel}>Anonymous Doctor</Text>
             </View>
             
             <TouchableOpacity 
               style={[
-                styles.anonymousToggle,
-                isAnonymousMode ? styles.anonymousToggleActive : {}
+                styles.toggleSwitch,
+                isAnonymousMode ? styles.toggleActive : {}
               ]}
               onPress={() => setIsAnonymousMode(!isAnonymousMode)}
             >
-              {isAnonymousMode ? (
-                <View style={styles.toggleOn}>
-                  <UserCheck size={16} color="#FFFFFF" />
-                </View>
-              ) : (
-                <View style={styles.toggleOff}>
-                  <User size={16} color="#64748B" />
-                </View>
-              )}
+              <View style={[
+                styles.toggleHandle,
+                isAnonymousMode ? styles.toggleHandleActive : {}
+              ]}>
+                {isAnonymousMode ? (
+                  <UserCheck size={14} color="#0066CC" />
+                ) : (
+                  <User size={14} color="#64748B" />
+                )}
+              </View>
             </TouchableOpacity>
           </View>
         </View>
         
-        <View style={styles.form}>
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Personal Information</Text>
+          
           <View style={styles.inputGroup}>
             <View style={styles.labelContainer}>
               <Text style={styles.inputLabel}>Full Name</Text>
-              <Text style={styles.requiredBadge}>Required</Text>
+              <Text style={styles.requiredLabel}>Required</Text>
             </View>
             <Text style={styles.inputHelper}>
-              Your professional name as it should appear to other doctors (not email)
+              Your professional name as it should appear to other doctors
             </Text>
             <TextInput
               style={[
@@ -395,10 +387,7 @@ export default function EditProfile() {
                 localProfile.full_name?.includes('@') && styles.invalidInput
               ]}
               value={localProfile.full_name}
-              onChangeText={(text) => {
-                console.log("Updating full_name to:", text);
-                setLocalProfile(prev => ({ ...prev, full_name: text }));
-              }}
+              onChangeText={(text) => setLocalProfile(prev => ({ ...prev, full_name: text }))}
               placeholder="Dr. John Smith"
               placeholderTextColor="#A0AEC0"
             />
@@ -423,7 +412,7 @@ export default function EditProfile() {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Hospital / Institution</Text>
             <View style={styles.inputWithIcon}>
-              <Building2 size={20} color="#64748B" style={styles.inputIcon} />
+              <Building2 size={18} color="#0066CC" style={styles.inputIcon} />
               <TextInput
                 style={styles.textInputWithIcon}
                 value={localProfile.hospital}
@@ -437,7 +426,7 @@ export default function EditProfile() {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Location</Text>
             <View style={styles.inputWithIcon}>
-              <MapPin size={20} color="#64748B" style={styles.inputIcon} />
+              <MapPin size={18} color="#0066CC" style={styles.inputIcon} />
               <TextInput
                 style={styles.textInputWithIcon}
                 value={localProfile.location}
@@ -468,8 +457,8 @@ export default function EditProfile() {
             
             <View style={styles.tagsContainer}>
               {localProfile.expertise.map((item, index) => (
-                <View key={index} style={styles.expertiseItem}>
-                  <Text style={styles.expertiseItemText}>{item}</Text>
+                <View key={index} style={styles.tagItem}>
+                  <Text style={styles.tagItemText}>{item}</Text>
                   <TouchableOpacity style={styles.tagRemoveButton} onPress={() => removeExpertise(index)}>
                     <X size={14} color="#64748B" />
                   </TouchableOpacity>
@@ -491,44 +480,45 @@ export default function EditProfile() {
               </TouchableOpacity>
             </View>
           </View>
+        </View>
+        
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeader}>
+            <Briefcase size={20} color="#0066CC" />
+            <Text style={styles.sectionTitle}>Work Experience</Text>
+            <TouchableOpacity 
+              style={styles.addButton}
+              onPress={addWorkExperience}
+            >
+              <Plus size={14} color="#0066CC" />
+              <Text style={styles.addButtonText}>Add</Text>
+            </TouchableOpacity>
+          </View>
           
-          {/* Work Experience Section */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Briefcase size={20} color="#0066CC" />
-              <Text style={styles.sectionTitle}>Work Experience</Text>
-              <TouchableOpacity 
-                style={styles.addButton}
-                onPress={addWorkExperience}
-              >
-                <Plus size={16} color="#0066CC" />
-                <Text style={styles.addButtonText}>Add</Text>
-              </TouchableOpacity>
-            </View>
-            
-            <Text style={styles.sectionDescription}>
-              Add your professional history to showcase your career path
-            </Text>
-            
-            {localProfile.work_experience.map((item, index) => (
-              <View key={item.id || index} style={styles.itemCard}>
-                <View style={styles.sectionLabel}>
-                  <Text style={styles.sectionLabelText}>Work Experience {index + 1}</Text>
+          <Text style={styles.sectionDescription}>
+            Add your professional history to showcase your career path
+          </Text>
+          
+          {localProfile.work_experience.map((item, index) => (
+            <View key={item.id || index} style={styles.itemCard}>
+              <View style={styles.itemHeader}>
+                <View style={styles.itemBadge}>
+                  <Text style={styles.itemBadgeText}>{index + 1}</Text>
                 </View>
-                <View style={styles.itemHeader}>
-                  <TextInput
-                    style={styles.itemTitle}
-                    value={item.title}
-                    onChangeText={(text) => updateWorkExperience(index, 'title', text)}
-                    placeholder="Position Title"
-                    placeholderTextColor="#A0AEC0"
-                  />
-                  <TouchableOpacity style={styles.removeButton} onPress={() => removeWorkExperience(index)}>
-                    <X size={16} color="#FF3B30" />
-                  </TouchableOpacity>
-                </View>
-                
-                <Text style={styles.inputLabel}>Organization</Text>
+                <TextInput
+                  style={styles.itemTitle}
+                  value={item.title}
+                  onChangeText={(text) => updateWorkExperience(index, 'title', text)}
+                  placeholder="Position Title"
+                  placeholderTextColor="#A0AEC0"
+                />
+                <TouchableOpacity style={styles.removeButton} onPress={() => removeWorkExperience(index)}>
+                  <X size={16} color="#FF3B30" />
+                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.inputRow}>
+                <Text style={styles.itemInputLabel}>Organization</Text>
                 <TextInput
                   style={styles.itemInput}
                   value={item.organization}
@@ -536,49 +526,54 @@ export default function EditProfile() {
                   placeholder="Company or organization name"
                   placeholderTextColor="#A0AEC0"
                 />
-                
-                <View style={styles.dateContainer}>
-                  <View style={styles.dateFieldContainer}>
-                    <Text style={styles.inputLabel}>Start Date</Text>
-                    <View style={styles.dateField}>
-                      <CalendarDays size={14} color="#0066CC" />
-                      <TextInput
-                        style={styles.dateInput}
-                        value={item.start_date}
-                        onChangeText={(text) => updateWorkExperience(index, 'start_date', text)}
-                        placeholder="MM/YYYY"
-                        placeholderTextColor="#A0AEC0"
-                      />
-                    </View>
-                  </View>
-                  
-                  <View style={styles.dateFieldContainer}>
-                    <Text style={styles.inputLabel}>End Date</Text>
-                    <View style={styles.dateField}>
-                      <CalendarDays size={14} color="#0066CC" />
-                      <TextInput
-                        style={styles.dateInput}
-                        value={item.end_date}
-                        onChangeText={(text) => updateWorkExperience(index, 'end_date', text)}
-                        placeholder={item.is_current ? "Present" : "MM/YYYY"}
-                        placeholderTextColor="#A0AEC0"
-                        editable={!item.is_current}
-                      />
-                    </View>
+              </View>
+              
+              <View style={styles.dateContainer}>
+                <View style={styles.dateFieldContainer}>
+                  <Text style={styles.itemInputLabel}>Start Date</Text>
+                  <View style={styles.dateField}>
+                    <CalendarDays size={14} color="#0066CC" />
+                    <TextInput
+                      style={styles.dateInput}
+                      value={item.start_date}
+                      onChangeText={(text) => updateWorkExperience(index, 'start_date', text)}
+                      placeholder="MM/YYYY"
+                      placeholderTextColor="#A0AEC0"
+                    />
                   </View>
                 </View>
                 
-                <View style={styles.checkboxContainer}>
-                  <TouchableOpacity
-                    style={styles.checkbox}
-                    onPress={() => updateWorkExperience(index, 'is_current', !item.is_current)}
-                  >
-                    {item.is_current && <CheckCircle2 size={16} color="#0066CC" />}
-                  </TouchableOpacity>
-                  <Text style={styles.checkboxLabel}>Current Position</Text>
+                <View style={styles.dateFieldContainer}>
+                  <Text style={styles.itemInputLabel}>End Date</Text>
+                  <View style={styles.dateField}>
+                    <CalendarDays size={14} color="#0066CC" />
+                    <TextInput
+                      style={styles.dateInput}
+                      value={item.end_date}
+                      onChangeText={(text) => updateWorkExperience(index, 'end_date', text)}
+                      placeholder={item.is_current ? "Present" : "MM/YYYY"}
+                      placeholderTextColor="#A0AEC0"
+                      editable={!item.is_current}
+                    />
+                  </View>
                 </View>
-                
-                <Text style={styles.inputLabel}>Description</Text>
+              </View>
+              
+              <View style={styles.checkboxContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.checkbox,
+                    item.is_current && styles.checkboxActive
+                  ]}
+                  onPress={() => updateWorkExperience(index, 'is_current', !item.is_current)}
+                >
+                  {item.is_current && <CheckCircle2 size={14} color="#0066CC" />}
+                </TouchableOpacity>
+                <Text style={styles.checkboxLabel}>Current Position</Text>
+              </View>
+              
+              <View style={styles.inputRow}>
+                <Text style={styles.itemInputLabel}>Description</Text>
                 <TextInput
                   style={[styles.itemInput, styles.multilineInput]}
                   value={item.description}
@@ -589,57 +584,58 @@ export default function EditProfile() {
                   numberOfLines={4}
                 />
               </View>
-            ))}
-            
-            {localProfile.work_experience.length === 0 && (
-              <TouchableOpacity 
-                style={styles.emptyState}
-                onPress={addWorkExperience}
-              >
-                <Briefcase size={20} color="#0066CC" />
-                <Text style={styles.emptyStateText}>Add Work Experience</Text>
-                <Plus size={16} color="#0066CC" />
-              </TouchableOpacity>
-            )}
+            </View>
+          ))}
+          
+          {localProfile.work_experience.length === 0 && (
+            <TouchableOpacity 
+              style={styles.emptyState}
+              onPress={addWorkExperience}
+            >
+              <Briefcase size={20} color="#0066CC" />
+              <Text style={styles.emptyStateText}>Add Work Experience</Text>
+              <Plus size={14} color="#0066CC" />
+            </TouchableOpacity>
+          )}
+        </View>
+        
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeader}>
+            <GraduationCap size={20} color="#0066CC" />
+            <Text style={styles.sectionTitle}>Education</Text>
+            <TouchableOpacity 
+              style={styles.addButton}
+              onPress={addEducation}
+            >
+              <Plus size={14} color="#0066CC" />
+              <Text style={styles.addButtonText}>Add</Text>
+            </TouchableOpacity>
           </View>
           
-          {/* Education Section */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <GraduationCap size={20} color="#0066CC" />
-              <Text style={styles.sectionTitle}>Education</Text>
-              <TouchableOpacity 
-                style={styles.addButton}
-                onPress={addEducation}
-              >
-                <Plus size={16} color="#0066CC" />
-                <Text style={styles.addButtonText}>Add</Text>
-              </TouchableOpacity>
-            </View>
-            
-            <Text style={styles.sectionDescription}>
-              Add your educational background and qualifications
-            </Text>
-            
-            {localProfile.education.map((item, index) => (
-              <View key={item.id || index} style={styles.itemCard}>
-                <View style={styles.sectionLabel}>
-                  <Text style={styles.sectionLabelText}>Education {index + 1}</Text>
+          <Text style={styles.sectionDescription}>
+            Add your educational background and qualifications
+          </Text>
+          
+          {localProfile.education.map((item, index) => (
+            <View key={item.id || index} style={styles.itemCard}>
+              <View style={styles.itemHeader}>
+                <View style={styles.itemBadge}>
+                  <Text style={styles.itemBadgeText}>{index + 1}</Text>
                 </View>
-                <View style={styles.itemHeader}>
-                  <TextInput
-                    style={styles.itemTitle}
-                    value={item.degree}
-                    onChangeText={(text) => updateEducation(index, 'degree', text)}
-                    placeholder="Degree / Certificate"
-                    placeholderTextColor="#A0AEC0"
-                  />
-                  <TouchableOpacity style={styles.removeButton} onPress={() => removeEducation(index)}>
-                    <X size={16} color="#FF3B30" />
-                  </TouchableOpacity>
-                </View>
-                
-                <Text style={styles.inputLabel}>Institution</Text>
+                <TextInput
+                  style={styles.itemTitle}
+                  value={item.degree}
+                  onChangeText={(text) => updateEducation(index, 'degree', text)}
+                  placeholder="Degree / Certificate"
+                  placeholderTextColor="#A0AEC0"
+                />
+                <TouchableOpacity style={styles.removeButton} onPress={() => removeEducation(index)}>
+                  <X size={16} color="#FF3B30" />
+                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.inputRow}>
+                <Text style={styles.itemInputLabel}>Institution</Text>
                 <TextInput
                   style={styles.itemInput}
                   value={item.institution}
@@ -647,49 +643,54 @@ export default function EditProfile() {
                   placeholder="School or university name"
                   placeholderTextColor="#A0AEC0"
                 />
-                
-                <View style={styles.dateContainer}>
-                  <View style={styles.dateFieldContainer}>
-                    <Text style={styles.inputLabel}>Start Date</Text>
-                    <View style={styles.dateField}>
-                      <CalendarDays size={14} color="#0066CC" />
-                      <TextInput
-                        style={styles.dateInput}
-                        value={item.start_date}
-                        onChangeText={(text) => updateEducation(index, 'start_date', text)}
-                        placeholder="MM/YYYY"
-                        placeholderTextColor="#A0AEC0"
-                      />
-                    </View>
-                  </View>
-                  
-                  <View style={styles.dateFieldContainer}>
-                    <Text style={styles.inputLabel}>End Date</Text>
-                    <View style={styles.dateField}>
-                      <CalendarDays size={14} color="#0066CC" />
-                      <TextInput
-                        style={styles.dateInput}
-                        value={item.end_date}
-                        onChangeText={(text) => updateEducation(index, 'end_date', text)}
-                        placeholder={item.is_current ? "Present" : "MM/YYYY"}
-                        placeholderTextColor="#A0AEC0"
-                        editable={!item.is_current}
-                      />
-                    </View>
+              </View>
+              
+              <View style={styles.dateContainer}>
+                <View style={styles.dateFieldContainer}>
+                  <Text style={styles.itemInputLabel}>Start Date</Text>
+                  <View style={styles.dateField}>
+                    <CalendarDays size={14} color="#0066CC" />
+                    <TextInput
+                      style={styles.dateInput}
+                      value={item.start_date}
+                      onChangeText={(text) => updateEducation(index, 'start_date', text)}
+                      placeholder="MM/YYYY"
+                      placeholderTextColor="#A0AEC0"
+                    />
                   </View>
                 </View>
                 
-                <View style={styles.checkboxContainer}>
-                  <TouchableOpacity
-                    style={styles.checkbox}
-                    onPress={() => updateEducation(index, 'is_current', !item.is_current)}
-                  >
-                    {item.is_current && <CheckCircle2 size={16} color="#0066CC" />}
-                  </TouchableOpacity>
-                  <Text style={styles.checkboxLabel}>Current Education</Text>
+                <View style={styles.dateFieldContainer}>
+                  <Text style={styles.itemInputLabel}>End Date</Text>
+                  <View style={styles.dateField}>
+                    <CalendarDays size={14} color="#0066CC" />
+                    <TextInput
+                      style={styles.dateInput}
+                      value={item.end_date}
+                      onChangeText={(text) => updateEducation(index, 'end_date', text)}
+                      placeholder={item.is_current ? "Present" : "MM/YYYY"}
+                      placeholderTextColor="#A0AEC0"
+                      editable={!item.is_current}
+                    />
+                  </View>
                 </View>
-                
-                <Text style={styles.inputLabel}>Description</Text>
+              </View>
+              
+              <View style={styles.checkboxContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.checkbox,
+                    item.is_current && styles.checkboxActive
+                  ]}
+                  onPress={() => updateEducation(index, 'is_current', !item.is_current)}
+                >
+                  {item.is_current && <CheckCircle2 size={14} color="#0066CC" />}
+                </TouchableOpacity>
+                <Text style={styles.checkboxLabel}>Current Education</Text>
+              </View>
+              
+              <View style={styles.inputRow}>
+                <Text style={styles.itemInputLabel}>Description</Text>
                 <TextInput
                   style={[styles.itemInput, styles.multilineInput]}
                   value={item.description}
@@ -700,19 +701,19 @@ export default function EditProfile() {
                   numberOfLines={4}
                 />
               </View>
-            ))}
-            
-            {localProfile.education.length === 0 && (
-              <TouchableOpacity 
-                style={styles.emptyState}
-                onPress={addEducation}
-              >
-                <GraduationCap size={20} color="#0066CC" />
-                <Text style={styles.emptyStateText}>Add Education</Text>
-                <Plus size={16} color="#0066CC" />
-              </TouchableOpacity>
-            )}
-          </View>
+            </View>
+          ))}
+          
+          {localProfile.education.length === 0 && (
+            <TouchableOpacity 
+              style={styles.emptyState}
+              onPress={addEducation}
+            >
+              <GraduationCap size={20} color="#0066CC" />
+              <Text style={styles.emptyStateText}>Add Education</Text>
+              <Plus size={14} color="#0066CC" />
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
       
@@ -730,11 +731,11 @@ export default function EditProfile() {
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : saveSuccess ? (
             <View style={styles.saveSuccessContainer}>
-              <CheckCircle2 size={16} color="#FFFFFF" />
-              <Text style={styles.saveButtonText}>Saved</Text>
+              <CheckCircle2 size={20} color="#FFFFFF" />
+              <Text style={styles.saveButtonText}>Profile Saved</Text>
             </View>
           ) : (
-            <Text style={styles.saveButtonText}>Save</Text>
+            <Text style={styles.saveButtonText}>Save Profile</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -745,45 +746,43 @@ export default function EditProfile() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F8FAFC',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
-    elevation: 2,
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    backgroundColor: '#0066CC',
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontFamily: 'Inter_600SemiBold',
-    color: '#1A1A1A',
+    color: '#FFFFFF',
+    marginLeft: 12,
+    flex: 1,
+    textAlign: 'center',
   },
   backButton: {
     padding: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
   scrollView: {
     flex: 1,
+    paddingHorizontal: 16,
   },
   avatarSection: {
     alignItems: 'center',
-    padding: 24,
-    backgroundColor: '#FFFFFF',
-    marginTop: -50,
-    borderRadius: 16,
-    marginHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    paddingVertical: 24,
+    marginTop: 16,
   },
   avatarContainer: {
     alignItems: 'center',
@@ -793,8 +792,13 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: 50,
     marginBottom: 16,
-    borderWidth: 4,
+    borderWidth: 3,
     borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   avatarPlaceholder: {
     width: 100,
@@ -804,61 +808,160 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
+    shadowColor: '#0066CC',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   changeAvatarButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#0066CC',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 20,
-    gap: 8,
+    borderRadius: 24,
+    gap: 6,
     shadowColor: '#0066CC',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 4,
   },
   changeAvatarText: {
     color: '#FFFFFF',
     fontSize: 14,
     fontFamily: 'Inter_500Medium',
   },
-  form: {
-    padding: 16,
+  sectionCard: {
     backgroundColor: '#FFFFFF',
-    marginTop: 16,
-    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 16,
     borderRadius: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#1E293B',
+    marginLeft: 8,
+    flex: 1,
+  },
+  sectionDescription: {
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    color: '#64748B',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  optionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F1F5F9',
+    padding: 12,
+    borderRadius: 12,
+  },
+  anonymousPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  anonymousAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#0066CC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    shadowColor: '#0066CC',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
     shadowRadius: 3,
     elevation: 2,
   },
+  anonymousLabel: {
+    fontSize: 15,
+    fontFamily: 'Inter_500Medium',
+    color: '#1E293B',
+  },
+  toggleSwitch: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#E2E8F0',
+    justifyContent: 'center',
+    padding: 2,
+  },
+  toggleActive: {
+    backgroundColor: '#E5F0FF',
+  },
+  toggleHandle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  toggleHandleActive: {
+    transform: [{ translateX: 20 }],
+  },
   inputGroup: {
-    marginBottom: 24,
+    marginBottom: 20,
     width: '100%',
   },
+  labelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
   inputLabel: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: 'Inter_600SemiBold',
-    color: '#1A1A1A',
-    marginBottom: 8,
+    color: '#334155',
+    marginBottom: 6,
+  },
+  requiredLabel: {
+    fontSize: 11,
+    fontFamily: 'Inter_500Medium',
+    color: '#FFFFFF',
+    backgroundColor: '#0066CC',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginLeft: 8,
   },
   inputHelper: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: 'Inter_400Regular',
     color: '#64748B',
-    marginBottom: 12,
+    marginBottom: 8,
+    lineHeight: 18,
   },
   textInput: {
     width: '100%',
-    padding: 14,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 10,
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: 'Inter_400Regular',
     color: '#334155',
     backgroundColor: '#F8FAFC',
@@ -866,11 +969,11 @@ const styles = StyleSheet.create({
   textArea: {
     width: '100%',
     height: 120,
-    padding: 14,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 10,
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: 'Inter_400Regular',
     color: '#334155',
     backgroundColor: '#F8FAFC',
@@ -884,56 +987,48 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   inputIcon: {
-    marginLeft: 14,
+    marginLeft: 12,
   },
   textInputWithIcon: {
     flex: 1,
-    padding: 14,
-    fontSize: 16,
+    padding: 12,
+    fontSize: 15,
     fontFamily: 'Inter_400Regular',
     color: '#334155',
+  },
+  invalidInput: {
+    borderColor: '#EF4444',
+    backgroundColor: 'rgba(254, 226, 226, 0.3)',
+  },
+  errorText: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    color: '#EF4444',
+    marginTop: 4,
   },
   tagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginBottom: 12,
+    gap: 8,
   },
   tagItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(0, 102, 204, 0.08)',
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginRight: 8,
-    marginBottom: 8,
+    paddingVertical: 5,
+    borderRadius: 16,
   },
   tagItemText: {
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
-    color: '#0066CC',
-    marginLeft: 4,
-    marginRight: 4,
-  },
-  expertiseItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 102, 204, 0.08)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  expertiseItemText: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'Inter_500Medium',
     color: '#0066CC',
     marginRight: 4,
   },
   tagRemoveButton: {
-    width: 20,
-    height: 20,
+    width: 18,
+    height: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -941,151 +1036,147 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
+    gap: 8,
   },
   tagInput: {
     flex: 1,
-    padding: 14,
+    padding: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 10,
-    fontSize: 16,
+    borderRadius: 8,
+    fontSize: 14,
     fontFamily: 'Inter_400Regular',
     color: '#334155',
     backgroundColor: '#F8FAFC',
-    marginRight: 8,
   },
   addTagButton: {
     backgroundColor: '#0066CC',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
   },
   addTagButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'Inter_500Medium',
-  },
-  section: {
-    marginTop: 24,
-    marginBottom: 16,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter_600SemiBold',
-    color: '#334155',
-    marginLeft: 8,
-    flex: 1,
-  },
-  sectionDescription: {
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    color: '#64748B',
-    marginBottom: 16,
-    marginLeft: 2,
   },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 8,
-    backgroundColor: 'rgba(0, 102, 204, 0.1)',
+    padding: 6,
+    backgroundColor: 'rgba(0, 102, 204, 0.08)',
     borderRadius: 8,
+    gap: 4,
   },
   addButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'Inter_500Medium',
     color: '#0066CC',
-    marginLeft: 4,
   },
   itemCard: {
-    backgroundColor: '#FFFFFF',
-    padding: 16,
+    backgroundColor: '#F8FAFC',
+    padding: 14,
     marginBottom: 12,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
   },
   itemHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 12,
+    gap: 8,
+  },
+  itemBadge: {
+    backgroundColor: 'rgba(0, 102, 204, 0.08)',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  itemBadgeText: {
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#0066CC',
   },
   itemTitle: {
     flex: 1,
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
+    fontSize: 15,
+    fontFamily: 'Inter_500Medium',
     color: '#1A1A1A',
     padding: 8,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
+  inputRow: {
+    marginBottom: 12,
+  },
+  itemInputLabel: {
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+    color: '#64748B',
+    marginBottom: 4,
+  },
   itemInput: {
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: 'Inter_400Regular',
     color: '#1A1A1A',
-    paddingVertical: 10,
-    paddingHorizontal: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 8,
-    marginBottom: 12,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
   },
   multilineInput: {
     minHeight: 80,
     textAlignVertical: 'top',
-    paddingTop: 10,
+    paddingTop: 8,
   },
   dateContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
-    gap: 12,
+    gap: 10,
+  },
+  dateFieldContainer: {
+    flex: 1,
   },
   dateField: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 8,
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   dateInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: 'Inter_400Regular',
     color: '#1A1A1A',
-    marginLeft: 8,
-    paddingVertical: 4,
+    marginLeft: 6,
+    paddingVertical: 0,
   },
   checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
-    backgroundColor: '#F8FAFC',
-    padding: 10,
+    backgroundColor: '#FFFFFF',
+    padding: 8,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   checkbox: {
-    width: 20,
-    height: 20,
+    width: 18,
+    height: 18,
     borderWidth: 1,
     borderColor: '#0066CC',
     borderRadius: 4,
@@ -1094,10 +1185,13 @@ const styles = StyleSheet.create({
     marginRight: 8,
     backgroundColor: '#FFFFFF',
   },
+  checkboxActive: {
+    backgroundColor: 'rgba(0, 102, 204, 0.1)',
+  },
   checkboxLabel: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'Inter_500Medium',
-    color: '#1A1A1A',
+    color: '#334155',
   },
   emptyState: {
     flexDirection: 'row',
@@ -1108,8 +1202,7 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     borderRadius: 12,
     borderStyle: 'dashed',
-    backgroundColor: 'rgba(0, 102, 204, 0.05)',
-    marginBottom: 24,
+    backgroundColor: 'rgba(0, 102, 204, 0.04)',
   },
   emptyStateText: {
     fontSize: 14,
@@ -1117,191 +1210,50 @@ const styles = StyleSheet.create({
     color: '#0066CC',
     marginHorizontal: 8,
   },
-  sectionLabel: {
-    backgroundColor: 'rgba(0, 102, 204, 0.08)',
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    marginBottom: 12,
-  },
-  sectionLabelText: {
-    fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
-    color: '#0066CC',
-  },
-  dateFieldContainer: {
-    flex: 1,
-  },
   removeButton: {
-    padding: 8,
-    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    padding: 6,
+    backgroundColor: 'rgba(255, 59, 48, 0.08)',
     borderRadius: 8,
-  },
-  labelContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  requiredBadge: {
-    backgroundColor: '#FF3B30',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
-    marginLeft: 8,
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  invalidInput: {
-    borderColor: '#FF3B30',
-  },
-  errorText: {
-    color: '#FF3B30',
-    fontSize: 12,
-    fontFamily: 'Inter_400Regular',
-    marginTop: 4,
-  },
-  requiredPhotoNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-  },
-  photoHelperText: {
-    fontSize: 13,
-    fontFamily: 'Inter_400Regular',
-    color: '#64748B',
-    marginLeft: 8,
   },
   footer: {
     padding: 16,
+    paddingBottom: Platform.OS === 'ios' ? 32 : 16,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: '#E5E5E5',
+    borderTopColor: '#F1F5F9',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 4,
   },
   saveButton: {
     backgroundColor: '#0066CC',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    flexDirection: 'row',
+    paddingVertical: 14,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 80,
+    shadowColor: '#0066CC',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  saveButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
   },
   saveButtonLoading: {
-    backgroundColor: '#0066CC',
-    opacity: 0.8,
+    backgroundColor: '#64748B',
   },
   saveButtonSuccess: {
-    backgroundColor: '#22C55E',
+    backgroundColor: '#10B981',
   },
   saveSuccessContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-  },
-  saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  anonymousSection: {
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: 16,
-    marginTop: 16,
-    padding: 16,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 102, 204, 0.1)',
-  },
-  anonymousHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  anonymousSectionTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter_600SemiBold',
-    color: '#334155',
-    marginLeft: 8,
-  },
-  anonymousDescription: {
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    color: '#64748B',
-    marginBottom: 16,
-  },
-  anonymousOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  anonymousPreview: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  anonymousAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 2,
-    borderColor: '#0066CC',
-    alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
-  },
-  anonymousAvatarInner: {
-    width: '80%',
-    height: '80%',
-    borderRadius: 100,
-    backgroundColor: 'rgba(0, 102, 204, 0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  anonymousLabel: {
-    fontSize: 15,
-    fontFamily: 'Inter_500Medium',
-    color: '#334155',
-  },
-  anonymousToggle: {
-    width: 44,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: '#E2E8F0',
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    padding: 2,
-  },
-  anonymousToggleActive: {
-    backgroundColor: '#0066CC',
-    alignItems: 'flex-end',
-  },
-  toggleOn: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  toggleOff: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: 8,
   },
 });

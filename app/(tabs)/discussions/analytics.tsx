@@ -153,13 +153,13 @@ export default function ForumAnalytics() {
           const { count: postCount } = await supabase
             .from('discussions')
             .select('*', { count: 'exact', head: true })
-            .eq('user_id', user.id);
+            .eq('author_id', user.id);
             
           // Get comment count
           const { count: commentCount } = await supabase
             .from('discussion_comments')
             .select('*', { count: 'exact', head: true })
-            .eq('user_id', user.id);
+            .eq('author_id', user.id);
             
           return {
             ...user,
