@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,25 +10,28 @@ import {
   ScrollView,
   ActivityIndicator,
   Modal,
-  Linking
+  Linking,
+  SafeAreaView,
+  Pressable,
+  Animated as RNAnimated,
+  Alert,
+  Share
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  runOnJS,
-  interpolate,
-  Extrapolate,
-  useDerivedValue,
-  withRepeat
-} from 'react-native-reanimated';
 import {
   Gesture,
   GestureDetector,
   GestureHandlerRootView
 } from 'react-native-gesture-handler';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withSpring,
+  Easing,
+  interpolate,
+  Extrapolate
+} from 'react-native-reanimated';
 import { 
   User,
   Settings,
@@ -46,159 +49,155 @@ import {
   Globe,
   Sparkles,
   Download,
-  Award
+  Award,
+  UserCircle
 } from 'lucide-react-native';
 import { useProfileStore } from '@/stores/useProfileStore';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Feather } from '@expo/vector-icons';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const PANEL_WIDTH = SCREEN_WIDTH * 0.8;
 const SPRING_CONFIG = {
-  damping: 17,
-  stiffness: 90,
-  mass: 1,
+  damping: 26,
+  stiffness: 130,
+  mass: 1.2,
   overshootClamping: false,
   restDisplacementThreshold: 0.01,
   restSpeedThreshold: 0.01
 };
 
+// Added separate config for opening animation
+const OPEN_SPRING_CONFIG = {
+  damping: 30,
+  stiffness: 140,
+  mass: 1.2,
+  overshootClamping: false,
+  restDisplacementThreshold: 0.01,
+  restSpeedThreshold: 0.01
+};
+
+interface ExtendedProfile {
+  full_name?: string;
+  specialty?: string;
+  hospital?: string;
+  location?: string;
+  bio?: string;
+  expertise?: string[];
+  avatar_url?: string;
+  work_experience?: any[];
+  education?: any[];
+  // Additional properties used in this component
+  years?: string;
+  patients?: string;
+  email?: string;
+}
+
 interface ProfileSlidingPanelProps {
   isVisible: boolean;
   onClose: () => void;
+  userId: string;
 }
+
+const getInitials = (name: string) => {
+  return name
+    .split(' ')
+    .map(part => part.charAt(0))
+    .join('')
+    .toUpperCase()
+    .substring(0, 2);
+};
 
 const ProfileSlidingPanel: React.FC<ProfileSlidingPanelProps> = ({ 
   isVisible, 
-  onClose 
+  onClose,
+  userId
 }) => {
   const router = useRouter();
   const { profile, fetchProfile, isLoading } = useProfileStore();
   const [profileLoadError, setProfileLoadError] = useState(false);
   const [showBusinessCardModal, setShowBusinessCardModal] = useState(false);
-
+  const [selectedTab, setSelectedTab] = useState('view_profile');
+  const [isBusinessCardVisible, setIsBusinessCardVisible] = useState(false);
+  
   // Animation values
-  const translateX = useSharedValue(PANEL_WIDTH);
-  const backdropOpacity = useSharedValue(0);
-  const panelVisible = useSharedValue(false);
+  const slideAnim = useRef(new RNAnimated.Value(Dimensions.get('window').width)).current;
+  const backdropOpacity = useRef(new RNAnimated.Value(0)).current;
 
-  // Load profile data whenever panel becomes visible
-  useEffect(() => {
-    if (isVisible) {
-      loadProfileData();
-    }
-  }, [isVisible]);
-
+  // Define loadProfileData before it's used
   const loadProfileData = useCallback(async () => {
     try {
       setProfileLoadError(false);
-      await fetchProfile();
+      // Use userId to fetch the profile
+      if (userId) {
+        await fetchProfile();
+        console.log("Profile data loaded for userId:", userId);
+      } else {
+        console.error("No userId provided to ProfileSlidingPanel");
+        setProfileLoadError(true);
+      }
     } catch (error) {
       console.error('Error loading profile data:', error);
       setProfileLoadError(true);
     }
-  }, [fetchProfile]);
+  }, [fetchProfile, userId]);
 
-  // Panel visibility animation
+  useEffect(() => {
+    // Initialize for right-side panel
+    slideAnim.setValue(Dimensions.get('window').width);
+    console.log("Component mounted, reset slideAnim value to:", Dimensions.get('window').width);
+  }, []);
+
   useEffect(() => {
     if (isVisible) {
-      panelVisible.value = true;
-      backdropOpacity.value = withTiming(1, { duration: 250 });
-      translateX.value = withSpring(0, {
-        ...SPRING_CONFIG,
-        stiffness: 80, // Slightly softer spring for smoother entry
+      // Start animations when panel becomes visible
+      console.log("ProfileSlidingPanel is now visible, starting animation from:", Dimensions.get('window').width, "to 0");
+      RNAnimated.parallel([
+        RNAnimated.timing(slideAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        RNAnimated.timing(backdropOpacity, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        })
+      ]).start(() => {
+        console.log("Animation completed - panel should be visible now");
       });
+      
+      loadProfileData();
     } else {
-      backdropOpacity.value = withTiming(0, { duration: 200 });
-      translateX.value = withSpring(PANEL_WIDTH, SPRING_CONFIG, () => {
-        runOnJS(resetPanel)();
+      // Animate panel out when closed
+      console.log("ProfileSlidingPanel is now hidden, starting animation from current position to:", Dimensions.get('window').width);
+      RNAnimated.parallel([
+        RNAnimated.timing(slideAnim, {
+          toValue: Dimensions.get('window').width,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        RNAnimated.timing(backdropOpacity, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        })
+      ]).start(() => {
+        console.log("Hide animation completed");
       });
     }
-  }, [isVisible]);
-
-  const resetPanel = () => {
-    panelVisible.value = false;
-  };
-
-  // Derived animation for additional effects
-  const scale = useDerivedValue(() => {
-    return interpolate(
-      translateX.value,
-      [0, PANEL_WIDTH],
-      [1, 0.9],
-      Extrapolate.CLAMP
-    );
-  });
-
-  // Pan gesture handler with improved physics
-  const panGesture = Gesture.Pan()
-    .activeOffsetX([-10, 10]) // Start gesture only after moving 10px horizontally
-    .onUpdate((e) => {
-      const dragX = Math.max(0, e.translationX);
-      translateX.value = dragX;
-      
-      // Calculate backdrop opacity based on panel position
-      backdropOpacity.value = interpolate(
-        dragX,
-        [0, PANEL_WIDTH],
-        [1, 0],
-        Extrapolate.CLAMP
-      );
-    })
-    .onEnd((e) => {
-      const velocity = e.velocityX;
-      
-      // Fast swipe detection (velocity > 500 px/s)
-      if (velocity > 500 || e.translationX > PANEL_WIDTH * 0.3) {
-        // User dragged more than 30% or swiped quickly - close the panel
-        backdropOpacity.value = withTiming(0, { duration: 200 });
-        translateX.value = withSpring(PANEL_WIDTH, {
-          ...SPRING_CONFIG,
-          velocity: velocity, // Use the velocity for more natural feel
-        }, () => {
-          runOnJS(onClose)();
-          runOnJS(resetPanel)();
-        });
-      } else {
-        // Snap back to open position
-        translateX.value = withSpring(0, {
-          ...SPRING_CONFIG,
-          velocity: velocity,
-        });
-        backdropOpacity.value = withTiming(1, { duration: 200 });
-      }
-    });
-
-  // Animated styles
-  const backdropStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacity.value,
-    display: panelVisible.value ? 'flex' : 'none',
-  }));
-
-  const panelStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: translateX.value },
-      { scale: scale.value }
-    ],
-    opacity: interpolate(
-      translateX.value,
-      [0, PANEL_WIDTH],
-      [1, 0.5],
-      Extrapolate.CLAMP
-    ),
-    display: panelVisible.value ? 'flex' : 'none',
-  }));
+  }, [isVisible, loadProfileData]);
 
   // Navigation handlers
   const navigateTo = (path: string) => {
-    onClose();
-    // Use proper path format for expo-router
-    if (path === '/profile') {
-      router.push('/(tabs)/profile');
-    } else if (path === '/profile/edit') {
-      router.push('/(tabs)/profile/edit');
-    } else if (path === '/profile/settings') {
-      router.push('/(tabs)/profile/settings');
-    }
+    console.log('Navigating to:', path);
+    onClose(); // Close the panel before navigation
+    
+    // Use router.push for all navigation to maintain the navigation stack
+    // This allows users to return to their previous location when pressing back
+    setTimeout(() => {
+      router.push(path as any);
+    }, 300); // Keep the delay to ensure panel closes smoothly
   };
 
   const openBusinessCard = () => {
@@ -208,6 +207,54 @@ const ProfileSlidingPanel: React.FC<ProfileSlidingPanelProps> = ({
   const handleLogout = () => {
     // Implement logout logic
     onClose();
+  };
+
+  // Create a menu item component
+  const MenuItem = ({ 
+    icon, 
+    label, 
+    onPress, 
+    rightContent 
+  }: { 
+    icon: React.ReactNode; 
+    label: string; 
+    onPress: () => void; 
+    rightContent?: React.ReactNode 
+  }) => {
+    return (
+      <TouchableOpacity
+        style={[styles.menuItemAlt, rightContent ? styles.menuItemWithArrow : null]}
+        onPress={onPress}
+        activeOpacity={0.7}
+      >
+        <View style={styles.menuIconContainer}>
+          {icon}
+        </View>
+        <Text style={styles.menuItemText}>{label}</Text>
+        {rightContent && (
+          <View style={styles.menuItemRight}>
+            {rightContent}
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  // Render menu item
+  const renderMenuItem = (
+    icon: React.ReactNode,
+    label: string,
+    onPress: () => void,
+    rightContent?: React.ReactNode
+  ) => {
+    return (
+      <MenuItem
+        icon={icon}
+        label={label}
+        onPress={onPress}
+        rightContent={rightContent}
+      />
+    );
   };
 
   // Render profile content or loading state
@@ -257,8 +304,8 @@ const ProfileSlidingPanel: React.FC<ProfileSlidingPanelProps> = ({
             <Text style={styles.profileName}>
               {profile?.full_name || "Your Name"}
             </Text>
-            <View style={styles.specialtyContainer}>
-              <Text style={styles.profileSpecialty}>
+            <View style={styles.specialtyBadgeAlt}>
+              <Text style={styles.specialtyTextAlt}>
                 {profile?.specialty || "Healthcare Professional"}
               </Text>
             </View>
@@ -271,129 +318,108 @@ const ProfileSlidingPanel: React.FC<ProfileSlidingPanelProps> = ({
           bounces={false}
           overScrollMode="never"
         >
-          {/* Specialty highlight section */}
-          {profile?.specialty && (
-            <View style={styles.specialtyHighlightContainer}>
-              <LinearGradient
-                colors={['rgba(0, 102, 204, 0.15)', 'rgba(0, 145, 255, 0.25)']}
-                style={styles.specialtyHighlightGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              >
-                <Stethoscope size={22} color="#0066CC" />
-                <Text style={styles.specialtyHighlightText}>
-                  {profile.specialty}
-                </Text>
-              </LinearGradient>
-            </View>
-          )}
-
           {/* Professional information section */}
           <View style={styles.infoSectionContainer}>
+            {profile?.specialty && (
+              <View style={styles.infoCard}>
+                <View style={styles.infoCardContent}>
+                  <Stethoscope size={20} color="#0066CC" />
+                  <Text style={styles.infoItemText}>{profile.specialty}</Text>
+                </View>
+              </View>
+            )}
+            
             {profile?.hospital && (
               <View style={styles.infoCard}>
-                <LinearGradient
-                  colors={['rgba(0, 102, 204, 0.1)', 'rgba(0, 145, 255, 0.1)']}
-                  style={styles.infoCardGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                >
-                  <View style={styles.infoItem}>
-                    <Briefcase size={18} color="#0066CC" />
-                    <Text style={styles.infoItemText}>{profile.hospital}</Text>
-                  </View>
-                </LinearGradient>
+                <View style={styles.infoCardContent}>
+                  <Briefcase size={20} color="#0066CC" />
+                  <Text style={styles.infoItemText}>{profile.hospital}</Text>
+                </View>
               </View>
             )}
             
             {profile?.location && (
               <View style={styles.infoCard}>
-                <LinearGradient
-                  colors={['rgba(0, 102, 204, 0.1)', 'rgba(0, 145, 255, 0.1)']}
-                  style={styles.infoCardGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                >
-                  <View style={styles.infoItem}>
-                    <MapPin size={18} color="#0066CC" />
-                    <Text style={styles.infoItemText}>{profile.location}</Text>
-                  </View>
-                </LinearGradient>
+                <View style={styles.infoCardContent}>
+                  <MapPin size={20} color="#0066CC" />
+                  <Text style={styles.infoItemText}>{profile.location}</Text>
+                </View>
               </View>
             )}
 
             {profile?.bio && (
-              <View style={styles.bioContainer}>
+              <View style={styles.sectionBlock}>
                 <Text style={styles.sectionTitle}>About</Text>
-                <View style={styles.bioCardContainer}>
+                <View style={styles.contentCard}>
                   <Text style={styles.bioText}>{profile.bio}</Text>
                 </View>
               </View>
             )}
             
             {profile?.expertise && profile.expertise.length > 0 && (
-              <View style={styles.expertiseContainer}>
+              <View style={styles.sectionBlock}>
                 <Text style={styles.sectionTitle}>Areas of Expertise</Text>
                 <View style={styles.expertiseTagsContainer}>
                   {profile.expertise.map((area, index) => (
-                    <LinearGradient
-                      key={index}
-                      colors={['rgba(0, 102, 204, 0.08)', 'rgba(0, 145, 255, 0.12)']}
-                      style={styles.expertiseTag}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                    >
+                    <View key={index} style={styles.expertiseTag}>
                       <Text style={styles.expertiseTagText}>{area}</Text>
-                    </LinearGradient>
+                    </View>
                   ))}
                 </View>
               </View>
             )}
           </View>
 
-          <TouchableOpacity 
-            style={styles.menuItem}
-            onPress={() => navigateTo('/profile/edit')}
-          >
-            <View style={styles.menuItemLeft}>
-              <Settings size={22} color="#0066CC" />
-              <Text style={styles.menuItemText}>Edit Profile</Text>
+          {/* Stats in a more compact row */}
+          <View style={styles.statsRowCompact}>
+            <View style={styles.statItemCompact}>
+              <Text style={styles.statNumberCompact}>{(profile as ExtendedProfile)?.patients || "0"}</Text>
+              <Text style={styles.statLabelCompact}>Patients</Text>
             </View>
-            <ChevronRight size={18} color="#999" />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.menuItem}
-            onPress={openBusinessCard}
-          >
-            <View style={styles.menuItemLeft}>
-              <Award size={22} color="#0066CC" />
-              <Text style={styles.menuItemText}>Digital Business Card</Text>
+            <View style={styles.statDividerCompact} />
+            <View style={styles.statItemCompact}>
+              <Text style={styles.statNumberCompact}>{profile?.rating || "0"}</Text>
+              <Text style={styles.statLabelCompact}>Rating</Text>
             </View>
-            <ChevronRight size={18} color="#999" />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.menuItem}
-            onPress={() => navigateTo('/profile/settings')}
-          >
-            <View style={styles.menuItemLeft}>
-              <Settings size={22} color="#0066CC" />
-              <Text style={styles.menuItemText}>App Settings</Text>
-            </View>
-            <ChevronRight size={18} color="#999" />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.menuItem, styles.logoutItem]}
-            onPress={handleLogout}
-          >
-            <View style={styles.menuItemLeft}>
-              <LogOut size={22} color="#FF3B30" />
-              <Text style={[styles.menuItemText, styles.logoutText]}>Log Out</Text>
-            </View>
-          </TouchableOpacity>
+          </View>
         </ScrollView>
+
+        {/* Navigation buttons instead of tabs */}
+        <View style={styles.menuSection}>
+          {renderMenuItem(
+            <User size={20} color="#0066CC" />,
+            'Edit Profile',
+            () => navigateTo('/(tabs)/profile/edit'),
+            <ChevronRight size={18} color="#999" />
+          )}
+          
+          {renderMenuItem(
+            <UserCircle size={20} color="#0066CC" />,
+            'View Profile',
+            () => navigateTo('/(tabs)/profile'),
+            <ChevronRight size={18} color="#999" />
+          )}
+          
+          {renderMenuItem(
+            <Settings size={20} color="#0066CC" />,
+            'App Settings',
+            () => navigateTo('/(tabs)/profile/settings'),
+            <ChevronRight size={18} color="#999" />
+          )}
+          
+          {renderMenuItem(
+            <QrCode size={20} color="#0066CC" />,
+            'Digital Business Card',
+            openBusinessCard,
+            <ChevronRight size={18} color="#999" />
+          )}
+          
+          {renderMenuItem(
+            <LogOut size={20} color="#FF3B30" />,
+            'Log Out',
+            handleLogout
+          )}
+        </View>
 
         <View style={styles.footer}>
           <Text style={styles.versionText}>Version 1.0.0</Text>
@@ -402,55 +428,183 @@ const ProfileSlidingPanel: React.FC<ProfileSlidingPanelProps> = ({
     );
   };
 
-  return (
-    <>
-      <Animated.View style={[styles.backdrop, backdropStyle]}>
-        <TouchableOpacity 
-          style={styles.backdropTouchable} 
-          activeOpacity={1} 
-          onPress={onClose} 
-        />
-      </Animated.View>
+  const handleClosePanel = () => {
+    // Animate out first, then call onClose
+    RNAnimated.parallel([
+      RNAnimated.timing(slideAnim, {
+        toValue: Dimensions.get('window').width,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      RNAnimated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      })
+    ]).start(() => {
+      onClose();
+    });
+  };
 
-      <GestureHandlerRootView style={StyleSheet.absoluteFill}>
-        <GestureDetector gesture={panGesture}>
-          <Animated.View style={[styles.panel, panelStyle]}>
-            <View style={styles.blurContainer}>
-              <View style={styles.innerContainer}>
-                <View style={styles.header}>
-                  <View style={styles.headerTop}>
-                    <Text style={styles.title}>Profile</Text>
-                    <TouchableOpacity 
-                      style={styles.closeButton} 
-                      onPress={onClose}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    >
-                      <X size={24} color="#333" />
-                    </TouchableOpacity>
+  // Use a Modal approach with animation
+  return (
+    <Modal
+      visible={isVisible}
+      transparent={true}
+      animationType="none"
+      onRequestClose={handleClosePanel}
+      statusBarTranslucent={true}
+    >
+      <View style={[styles.container]}>
+        <RNAnimated.View 
+          style={[
+            styles.backdrop, 
+            { opacity: backdropOpacity }
+          ]}
+        >
+          <Pressable 
+            style={styles.backdropPressable} 
+            onPress={handleClosePanel}
+          />
+        </RNAnimated.View>
+        
+        <RNAnimated.View 
+          style={[
+            styles.panel,
+            { transform: [{ translateX: slideAnim }] }
+          ]}
+        >
+          <SafeAreaView style={styles.safeArea}>
+            <View style={styles.header}>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={handleClosePanel}
+              >
+                <Feather name="chevron-left" size={22} color="#334155" />
+              </TouchableOpacity>
+              <Text style={styles.headerTitle}>Profile</Text>
+              <View style={styles.headerRightPlaceholder} />
+            </View>
+            
+            {isLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#0066CC" />
+                <Text style={styles.loadingText}>Loading profile...</Text>
+              </View>
+            ) : profileLoadError ? (
+              <View style={styles.errorContainer}>
+                <View style={styles.errorIconContainer}>
+                  <Feather name="alert-circle" size={32} color="#EF4444" />
+                </View>
+                <Text style={styles.errorTitle}>Couldn't Load Profile</Text>
+                <Text style={styles.errorDescription}>{profileLoadError}</Text>
+                <TouchableOpacity
+                  style={styles.retryButton}
+                  onPress={loadProfileData}
+                >
+                  <Text style={styles.retryButtonText}>Try Again</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <ScrollView 
+                style={styles.scrollView}
+                contentContainerStyle={styles.contentContainer}
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.profileHeader}>
+                  <View style={styles.avatarOuterRing}>
+                    <View style={styles.avatarRing}>
+                      <View style={styles.avatarWrapper}>
+                        {profile?.avatar_url ? (
+                          <Image
+                            source={{ uri: profile.avatar_url }}
+                            style={styles.avatarImage}
+                          />
+                        ) : (
+                          <View style={styles.avatarPlaceholder}>
+                            <Text style={styles.avatarPlaceholderText}>
+                              {getInitials(profile?.full_name || "Your Name")}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                  <Text style={styles.nameText}>{profile?.full_name || "Your Name"}</Text>
+                  <View style={styles.specialtyBadgeAlt}>
+                    <Text style={styles.specialtyTextAlt}>{profile?.specialty || "Healthcare Professional"}</Text>
                   </View>
                   
-                  {renderProfileContent()}
+                  {/* Stats in a more compact row */}
+                  <View style={styles.statsRowCompact}>
+                    <View style={styles.statItemCompact}>
+                      <Text style={styles.statNumberCompact}>{(profile as ExtendedProfile)?.patients || "0"}</Text>
+                      <Text style={styles.statLabelCompact}>Patients</Text>
+                    </View>
+                    <View style={styles.statDividerCompact} />
+                    <View style={styles.statItemCompact}>
+                      <Text style={styles.statNumberCompact}>{profile?.rating || "0"}</Text>
+                      <Text style={styles.statLabelCompact}>Rating</Text>
+                    </View>
+                  </View>
                 </View>
-              </View>
-            </View>
-          </Animated.View>
-        </GestureDetector>
-      </GestureHandlerRootView>
-
-      {/* Business Card Modal */}
-      <BusinessCardModal 
-        isVisible={showBusinessCardModal}
-        onClose={() => setShowBusinessCardModal(false)}
-        profile={profile}
-      />
-    </>
+                
+                {/* Navigation buttons instead of tabs */}
+                <View style={styles.menuSection}>
+                  {renderMenuItem(
+                    <User size={20} color="#0066CC" />,
+                    'Edit Profile',
+                    () => navigateTo('/(tabs)/profile/edit'),
+                    <ChevronRight size={18} color="#999" />
+                  )}
+                  
+                  {renderMenuItem(
+                    <UserCircle size={20} color="#0066CC" />,
+                    'View Profile',
+                    () => navigateTo('/(tabs)/profile'),
+                    <ChevronRight size={18} color="#999" />
+                  )}
+                  
+                  {renderMenuItem(
+                    <Settings size={20} color="#0066CC" />,
+                    'App Settings',
+                    () => navigateTo('/(tabs)/profile/settings'),
+                    <ChevronRight size={18} color="#999" />
+                  )}
+                  
+                  {renderMenuItem(
+                    <QrCode size={20} color="#0066CC" />,
+                    'Digital Business Card',
+                    openBusinessCard,
+                    <ChevronRight size={18} color="#999" />
+                  )}
+                  
+                  {renderMenuItem(
+                    <LogOut size={20} color="#FF3B30" />,
+                    'Log Out',
+                    handleLogout
+                  )}
+                </View>
+              </ScrollView>
+            )}
+          </SafeAreaView>
+        </RNAnimated.View>
+        
+        {/* Business Card Modal */}
+        <BusinessCardModal 
+          isVisible={showBusinessCardModal}
+          onClose={() => setShowBusinessCardModal(false)}
+          profile={profile as ExtendedProfile}
+        />
+      </View>
+    </Modal>
   );
 };
 
 interface BusinessCardModalProps {
   isVisible: boolean;
   onClose: () => void;
-  profile: any;
+  profile: ExtendedProfile;
 }
 
 const BusinessCardModal: React.FC<BusinessCardModalProps> = ({ 
@@ -458,7 +612,7 @@ const BusinessCardModal: React.FC<BusinessCardModalProps> = ({
   onClose, 
   profile 
 }) => {
-  // Animation values
+  // Animation values using Reanimated
   const translateY = useSharedValue(300);
   const scale = useSharedValue(0.95);
   const opacity = useSharedValue(0);
@@ -468,27 +622,19 @@ const BusinessCardModal: React.FC<BusinessCardModalProps> = ({
   useEffect(() => {
     if (isVisible) {
       // Beautiful entrance animation sequence
-      opacity.value = withTiming(1, { duration: 350 });
-      translateY.value = withSpring(0, {
-        ...SPRING_CONFIG,
-        stiffness: 80,
-        damping: 15,
-      });
-      scale.value = withSpring(1, SPRING_CONFIG);
+      opacity.value = withTiming(1, { duration: 300 });
+      translateY.value = withSpring(0, { damping: 20, stiffness: 90 });
+      scale.value = withTiming(1, { duration: 300 });
       
       // Subtle rotation reset
-      cardRotation.value = withTiming(0, { duration: 400 });
+      cardRotation.value = withTiming(0, { duration: 300 });
       
       // Animate gradient shimmer
-      gradientPosition.value = withRepeat(
-        withTiming(1, { duration: 2000 }),
-        -1, // infinite repeat
-        true // yoyo: go back and forth
-      );
+      gradientPosition.value = 0;
     } else {
-      opacity.value = withTiming(0, { duration: 300 });
-      translateY.value = withSpring(300, SPRING_CONFIG);
-      scale.value = withSpring(0.95, SPRING_CONFIG);
+      opacity.value = withTiming(0, { duration: 200 });
+      translateY.value = withTiming(300, { duration: 300 });
+      scale.value = withTiming(0.95, { duration: 300 });
     }
   }, [isVisible]);
 
@@ -499,27 +645,12 @@ const BusinessCardModal: React.FC<BusinessCardModalProps> = ({
         translateY.value = e.translationY * 0.6; // Dampen movement for better feel
         
         // Reduce opacity and scale as dragged down
-        opacity.value = interpolate(
-          e.translationY,
-          [0, 300],
-          [1, 0.7],
-          Extrapolate.CLAMP
-        );
+        opacity.value = 1 - (e.translationY / 300);
         
-        scale.value = interpolate(
-          e.translationY,
-          [0, 300],
-          [1, 0.95],
-          Extrapolate.CLAMP
-        );
+        scale.value = 0.95 + (e.translationY / 300);
         
         // Add 3D rotation based on horizontal movement
-        cardRotation.value = interpolate(
-          e.translationX,
-          [-150, 150],
-          [-0.03, 0.03],
-          Extrapolate.CLAMP
-        );
+        cardRotation.value = e.translationX * 0.003;
       }
     })
     .onEnd((e) => {
@@ -528,31 +659,19 @@ const BusinessCardModal: React.FC<BusinessCardModalProps> = ({
       if (velocity > 500 || e.translationY > 100) {
         // User dragged down enough or swiped quickly - close
         opacity.value = withTiming(0, { duration: 200 });
-        translateY.value = withSpring(500, {
-          ...SPRING_CONFIG,
-          velocity: velocity * 0.3,
-        }, () => {
-          runOnJS(onClose)();
-        });
-        scale.value = withSpring(0.9, SPRING_CONFIG);
+        translateY.value = withTiming(500, { duration: 300 });
+        scale.value = withTiming(0.9, { duration: 300 });
+        onClose();
       } else {
         // Snap back with elegant animation
-        translateY.value = withSpring(0, {
-          ...SPRING_CONFIG,
-          stiffness: 200,
-          damping: 20,
-          velocity: velocity * 0.3,
-        });
-        scale.value = withSpring(1, {
-          ...SPRING_CONFIG,
-          stiffness: 200,
-        });
-        opacity.value = withTiming(1, { duration: 150 });
-        cardRotation.value = withTiming(0, { duration: 250 });
+        translateY.value = withSpring(0, { damping: 20, stiffness: 90 });
+        scale.value = withSpring(1, { damping: 20, stiffness: 90 });
+        opacity.value = withTiming(1, { duration: 200 });
+        cardRotation.value = withTiming(0, { duration: 300 });
       }
     });
 
-  // Animated styles
+  // Animated styles using Reanimated
   const backdropStyle = useAnimatedStyle(() => ({
     opacity: opacity.value * 0.85,
   }));
@@ -568,11 +687,14 @@ const BusinessCardModal: React.FC<BusinessCardModalProps> = ({
   }));
   
   const shimmerStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: interpolate(
-      gradientPosition.value,
-      [0, 1],
-      [-200, 200]
-    )}],
+    transform: [{ 
+      translateX: interpolate(
+        gradientPosition.value,
+        [0, 1],
+        [-200, 200],
+        Extrapolate.CLAMP
+      ) 
+    }],
   }));
 
   const handleShare = async () => {
@@ -594,59 +716,57 @@ const BusinessCardModal: React.FC<BusinessCardModalProps> = ({
       statusBarTranslucent={true}
     >
       <View style={styles.modalContainer}>
-        <Animated.View style={[styles.modalBackdrop, backdropStyle]}>
+        <RNAnimated.View style={[styles.modalBackdrop, backdropStyle]}>
           <TouchableOpacity 
-            style={StyleSheet.absoluteFill}
+            style={{position: 'absolute', left: 0, right: 0, top: 0, bottom: 0}}
             activeOpacity={1}
             onPress={onClose}
           />
-        </Animated.View>
+        </RNAnimated.View>
         
         <GestureHandlerRootView style={styles.gestureContainer}>
           <GestureDetector gesture={panGesture}>
-            <Animated.View style={[styles.businessCard, cardStyle]}>
+            <RNAnimated.View style={[styles.businessCard, cardStyle]}>
               <View style={styles.cardShadowWrapper}>
                 {/* Premium shimmer effect overlay */}
-                <Animated.View style={[StyleSheet.absoluteFill, styles.shimmerContainer, shimmerStyle]}>
+                <RNAnimated.View style={[{position: 'absolute', left: 0, right: 0, top: 0, bottom: 0}, styles.shimmerContainer, shimmerStyle]}>
                   <LinearGradient
-                    colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.3)', 'rgba(255,255,255,0)']}
+                    colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.15)', 'rgba(255,255,255,0)']}
                     start={{ x: 0, y: 0.5 }}
                     end={{ x: 1, y: 0.5 }}
                     style={styles.shimmerGradient}
                   />
-                </Animated.View>
+                </RNAnimated.View>
               
                 <View style={styles.cardContainer}>
-                  {/* Premium card handle */}
+                  {/* Card handle */}
                   <View style={styles.cardHandleContainer}>
                     <View style={styles.cardHandle} />
                   </View>
                   
                   {/* Header Section */}
                   <View style={styles.cardHeader}>
-                    <View>
-                      <View style={styles.brandRow}>
-                        <Sparkles size={16} color="#0066CC" />
-                        <Text style={styles.brandText}>Digital Business Card</Text>
-                      </View>
+                    <View style={styles.brandRow}>
+                      <Sparkles size={16} color="#0066CC" />
+                      <Text style={styles.brandText}>Digital Business Card</Text>
                     </View>
                     <TouchableOpacity 
                       onPress={onClose} 
                       style={styles.closeCardButton}
                     >
-                      <X size={18} color="#666666" />
+                      <X size={16} color="#64748B" />
                     </TouchableOpacity>
                   </View>
                   
                   {/* Professional header with gradient */}
                   <View style={styles.cardBannerContainer}>
                     <LinearGradient
-                      colors={['#0047AB', '#0066CC', '#1E90FF']}
+                      colors={['#0052B4', '#0066CC', '#1E90FF']}
                       style={styles.cardBanner}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                     >
-                      {/* Avatar with elegant border */}
+                      {/* Avatar with border */}
                       <View style={styles.cardAvatarOuterRing}>
                         <View style={styles.cardAvatarRing}>
                           <View style={styles.cardAvatarWrapper}>
@@ -664,13 +784,14 @@ const BusinessCardModal: React.FC<BusinessCardModalProps> = ({
                         </View>
                       </View>
                       
+                      {/* Name and specialty badge */}
                       <Text style={styles.cardNameText}>
                         {profile?.full_name || "Your Name"}
                       </Text>
                       
                       {profile?.specialty && (
                         <View style={styles.cardSpecialtyBadge}>
-                          <Stethoscope size={14} color="#FFFFFF" />
+                          <Stethoscope size={16} color="#FFFFFF" />
                           <Text style={styles.cardSpecialtyText}>
                             {profile.specialty}
                           </Text>
@@ -679,14 +800,14 @@ const BusinessCardModal: React.FC<BusinessCardModalProps> = ({
                     </LinearGradient>
                   </View>
                   
-                  {/* Professional information section - condensed */}
+                  {/* Contact Information */}
                   <View style={styles.cardInfoSection}>
-                    <Text style={styles.sectionLabel}>PROFESSIONAL DETAILS</Text>
+                    <Text style={styles.sectionLabel}>CONTACT INFORMATION</Text>
                     
                     {profile?.hospital && (
                       <View style={styles.cardInfoRow}>
                         <View style={styles.cardInfoIconContainer}>
-                          <Briefcase size={16} color="#0066CC" />
+                          <Briefcase size={18} color="#0066CC" />
                         </View>
                         <Text style={styles.cardInfoText}>{profile.hospital}</Text>
                       </View>
@@ -695,52 +816,75 @@ const BusinessCardModal: React.FC<BusinessCardModalProps> = ({
                     {profile?.location && (
                       <View style={styles.cardInfoRow}>
                         <View style={styles.cardInfoIconContainer}>
-                          <MapPin size={16} color="#0066CC" />
+                          <MapPin size={18} color="#0066CC" />
                         </View>
                         <Text style={styles.cardInfoText}>{profile.location}</Text>
                       </View>
                     )}
                     
-                    {/* Specialty is already shown in the header - only include if not shown there */}
-                    {!profile?.specialty && (
-                      <View style={styles.cardInfoRow}>
-                        <View style={styles.cardInfoIconContainer}>
-                          <Stethoscope size={16} color="#0066CC" />
-                        </View>
-                        <Text style={styles.cardInfoText}>Medical Professional</Text>
+                    {/* Placeholder for email - in a real app, add if available */}
+                    <View style={styles.cardInfoRow}>
+                      <View style={styles.cardInfoIconContainer}>
+                        <Mail size={18} color="#0066CC" />
                       </View>
-                    )}
+                      <Text style={styles.cardInfoText}>
+                        {profile?.email || "Connect via app"}
+                      </Text>
+                    </View>
                   </View>
                   
-                  {/* QR Code section - simplified */}
+                  {/* QR Code Section */}
                   <View style={styles.qrCodeSection}>
                     <View style={styles.qrCodeTopRow}>
-                      <Text style={styles.qrCodeTitle}>Connect</Text>
+                      <Text style={styles.qrCodeTitle}>Scan to Connect</Text>
                       <View style={styles.qrCodeDivider} />
                     </View>
                     
                     <View style={styles.qrCodeBorder}>
                       <View style={styles.qrCodeContainer}>
-                        <QrCode size={120} color="#000000" />
+                        {/* In a real implementation, generate a QR code for the profile */}
+                        <View style={{ 
+                          width: 200, 
+                          height: 200, 
+                          backgroundColor: '#FFFFFF', 
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          borderRadius: 8,
+                          overflow: 'hidden',
+                          borderWidth: 1,
+                          borderColor: '#E2E8F0' 
+                        }}>
+                          <QrCode size={150} color="#0066CC" />
+                        </View>
                       </View>
                     </View>
                     
                     <Text style={styles.qrCodeDescription}>
-                      Scan to connect with my professional profile
+                      Scan this code to view and connect with my professional profile
                     </Text>
                   </View>
                   
-                  {/* Action buttons - share only */}
-                  <TouchableOpacity 
-                    style={styles.singleActionButton} 
-                    onPress={handleShare}
-                  >
-                    <Share2 size={18} color="#FFFFFF" />
-                    <Text style={styles.cardActionText}>Share Profile</Text>
+                  {/* Action Button */}
+                  <TouchableOpacity style={styles.singleActionButton} onPress={handleShare}>
+                    <LinearGradient
+                      colors={['#0052B4', '#0066CC', '#1E90FF']}
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                        borderRadius: 14,
+                      }}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    />
+                    <Share2 size={20} color="#FFFFFF" />
+                    <Text style={styles.cardActionText}>Share Business Card</Text>
                   </TouchableOpacity>
                 </View>
               </View>
-            </Animated.View>
+            </RNAnimated.View>
           </GestureDetector>
         </GestureHandlerRootView>
       </View>
@@ -749,147 +893,103 @@ const BusinessCardModal: React.FC<BusinessCardModalProps> = ({
 };
 
 const styles = StyleSheet.create({
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    zIndex: 999,
+  container: {
+    position: "absolute", 
+    left: 0, 
+    right: 0, 
+    top: 0, 
+    bottom: 0,
+    zIndex: 9999,
+    flex: 1,
+    width: '100%',
+    height: '100%',
   },
-  backdropTouchable: {
+  hidden: {
+    display: 'none',
+  },
+  backdrop: {
+    position: "absolute", 
+    left: 0, 
+    right: 0, 
+    top: 0, 
+    bottom: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+  },
+  backdropPressable: {
     flex: 1,
   },
   panel: {
     position: 'absolute',
-    right: 0,
     top: 0,
-    width: PANEL_WIDTH,
-    height: SCREEN_HEIGHT,
-    backgroundColor: 'transparent',
-    zIndex: 1000,
-    overflow: 'hidden',
-  },
-  blurContainer: {
-    flex: 1,
-    overflow: 'hidden',
-    borderTopLeftRadius: 16,
-    borderBottomLeftRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    right: 0,
+    bottom: 0,
+    width: '85%',
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderBottomLeftRadius: 24,
     shadowColor: '#000',
-    shadowOffset: { width: -2, height: 0 },
-    shadowOpacity: 0.15,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
     shadowRadius: 10,
-    elevation: 10,
+    elevation: 5,
   },
-  innerContainer: {
+  safeArea: {
     flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
   },
   header: {
-    paddingTop: Platform.OS === 'ios' ? 50 : 30,
-    paddingHorizontal: 20,
-    flex: 1,
-  },
-  headerTop: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#333',
-    fontFamily: 'Inter_700Bold',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
   closeButton: {
-    width: 36,
+    width: 36, 
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  loadingText: {
-    marginTop: 12,
+  headerTitle: {
     fontSize: 16,
-    color: '#666',
-    fontFamily: 'Inter_500Medium',
-  },
-  errorContainer: {
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#FF3B30',
-    marginBottom: 16,
-    fontFamily: 'Inter_500Medium',
-  },
-  retryButton: {
-    backgroundColor: '#0066CC',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  retryButtonText: {
-    color: 'white',
-    fontSize: 16,
+    fontWeight: '600',
+    color: '#334155',
     fontFamily: 'Inter_600SemiBold',
+  },
+  headerRightPlaceholder: {
+    width: 36,
   },
   profileHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingBottom: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
-  },
-  statsContainer: {
-    flexDirection: 'row',
+    paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
-    justifyContent: 'space-around',
-  },
-  statItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#333',
-    marginTop: 8,
-    marginBottom: 4,
-    fontFamily: 'Inter_700Bold',
-  },
-  statLabel: {
-    fontSize: 14,
-    color: '#666',
-    fontFamily: 'Inter_400Regular',
+    borderBottomColor: '#F2F4F7',
   },
   avatarContainer: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowColor: '#0066CC',
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 5,
+    shadowRadius: 4,
+    elevation: 4,
+    marginRight: 16,
   },
   avatarImage: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     borderWidth: 2,
     borderColor: 'white',
   },
@@ -897,166 +997,215 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   profileName: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
-    color: '#333',
-    marginBottom: 6,
+    color: '#111827',
     fontFamily: 'Inter_600SemiBold',
+    marginBottom: 4,
   },
-  specialtyContainer: {
-    backgroundColor: 'rgba(0, 102, 204, 0.1)',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
+  specialtyBadgeAlt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EBF5FF',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 12,
     alignSelf: 'flex-start',
   },
-  profileSpecialty: {
-    fontSize: 16,
+  specialtyTextAlt: {
+    fontSize: 13,
+    fontWeight: '500',
     color: '#0066CC',
-    fontWeight: '600',
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: 'Inter_500Medium',
   },
   menuScrollView: {
     flex: 1,
-    marginTop: 6,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
-  },
-  menuItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  menuItemText: {
-    fontSize: 17,
-    marginLeft: 16,
-    color: '#333',
-    fontFamily: 'Inter_500Medium',
-  },
-  logoutItem: {
-    marginTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.05)',
-  },
-  logoutText: {
-    color: '#FF3B30',
-  },
-  footer: {
-    paddingVertical: 16,
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.05)',
-  },
-  versionText: {
-    fontSize: 14,
-    color: '#999',
-    fontFamily: 'Inter_400Regular',
   },
   infoSectionContainer: {
-    marginBottom: 20,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
   infoCard: {
     marginBottom: 12,
+    backgroundColor: '#F8FAFC',
     borderRadius: 12,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#EEF2F6',
   },
-  infoCardGradient: {
-    borderRadius: 12,
+  infoCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 16,
   },
-  infoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
   infoItemText: {
     fontSize: 15,
-    color: '#333',
+    color: '#334155',
     fontWeight: '500',
     fontFamily: 'Inter_500Medium',
-    marginLeft: 8,
+    marginLeft: 12,
+  },
+  sectionBlock: {
+    marginTop: 16,
+    marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#333',
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#64748B',
     marginBottom: 8,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: 'Inter_600SemiBold',
   },
-  bioContainer: {
-    marginTop: 16,
-    marginBottom: 20,
-  },
-  bioCardContainer: {
-    backgroundColor: 'rgba(0, 102, 204, 0.05)',
+  contentCard: {
+    backgroundColor: '#F8FAFC',
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(0, 102, 204, 0.1)',
+    borderColor: '#EEF2F6',
   },
   bioText: {
     fontSize: 15,
-    color: '#333',
+    color: '#334155',
     lineHeight: 22,
     fontFamily: 'Inter_400Regular',
-  },
-  expertiseContainer: {
-    marginBottom: 20,
   },
   expertiseTagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 6,
+    marginTop: 2,
   },
   expertiseTag: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 16,
+    borderRadius: 8,
     marginRight: 8,
     marginBottom: 8,
+    backgroundColor: '#EBF5FF',
     borderWidth: 1,
-    borderColor: 'rgba(0, 102, 204, 0.1)',
+    borderColor: '#D1E5FD',
   },
   expertiseTagText: {
     fontSize: 14,
     color: '#0066CC',
-    fontWeight: '600',
-    fontFamily: 'Inter_600SemiBold',
+    fontWeight: '500',
+    fontFamily: 'Inter_500Medium',
   },
-  specialtyHighlightContainer: {
-    marginBottom: 20,
-    paddingHorizontal: 16,
+  menuSection: {
+    marginHorizontal: 20,
+    marginTop: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#EEF2F6',
+    marginBottom: 24,
   },
-  specialtyHighlightGradient: {
+  menuItemAlt: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 102, 204, 0.2)',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEF2F6',
+    backgroundColor: '#FFFFFF',
   },
-  specialtyHighlightText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#0066CC',
-    marginLeft: 12,
-    fontFamily: 'Inter_700Bold',
+  menuItemWithArrow: {
+    paddingRight: 12,
   },
-  modalContainer: {
+  menuIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EBF5FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  menuItemText: {
+    flex: 1,
+    fontSize: 15,
+    color: '#334155',
+    fontFamily: 'Inter_500Medium',
+  },
+  menuItemRight: {
+    marginLeft: 8,
+  },
+  footer: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#F2F4F7',
+  },
+  versionText: {
+    fontSize: 13,
+    color: '#94A3B8',
+    fontFamily: 'Inter_400Regular',
+  },
+  loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 24,
+  },
+  loadingText: {
+    fontSize: 15,
+    color: '#64748B',
+    marginTop: 12,
+    fontFamily: 'Inter_500Medium',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FEF2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 8,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  errorDescription: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#4B5563',
+    marginBottom: 24,
+    textAlign: 'center',
+    fontFamily: 'Inter_400Regular',
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: '#0066CC',
+    borderRadius: 8,
+    gap: 8,
+  },
+  retryButtonText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontFamily: 'Inter_500Medium',
   },
   modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(18, 25, 38, 0.9)',
+    position: "absolute", 
+    left: 0, 
+    right: 0, 
+    top: 0, 
+    bottom: 0,
+    backgroundColor: 'rgba(18, 25, 38, 0.8)',
   },
   gestureContainer: {
     width: '100%',
@@ -1064,118 +1213,121 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   businessCard: {
-    width: SCREEN_WIDTH * 0.88,
-    maxHeight: SCREEN_HEIGHT * 0.85,
-    borderRadius: 24,
+    width: '90%',
+    maxWidth: 400,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     overflow: 'hidden',
+    alignSelf: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
   },
   cardShadowWrapper: {
-    borderRadius: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 24,
-    backgroundColor: '#FFFFFF',
+    width: '100%',
+    borderRadius: 20,
     overflow: 'hidden',
-    position: 'relative',
   },
   shimmerContainer: {
     overflow: 'hidden',
-    zIndex: 10,
   },
   shimmerGradient: {
-    width: 400,
+    width: '200%',
     height: '100%',
-    position: 'absolute',
   },
   cardContainer: {
-    borderRadius: 24,
-    overflow: 'hidden',
     backgroundColor: '#FFFFFF',
   },
   cardHandleContainer: {
-    height: 22,
+    width: '100%',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(247, 249, 252, 0.8)',
+    paddingTop: 12,
+    paddingBottom: 8,
   },
   cardHandle: {
-    width: 36,
+    width: 40,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    backgroundColor: '#E2E8F0',
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(247, 249, 252, 0.8)',
+    paddingVertical: 16,
   },
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   brandText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#0066CC',
-    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#334155',
+    fontFamily: 'Inter_600SemiBold',
   },
   closeCardButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   cardBannerContainer: {
     overflow: 'hidden',
+    borderRadius: 0,
   },
   cardBanner: {
     width: '100%',
-    paddingTop: 25,
-    paddingBottom: 25,
+    paddingTop: 32,
+    paddingBottom: 32,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   cardAvatarOuterRing: {
     width: 110,
     height: 110,
     borderRadius: 55,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   cardAvatarRing: {
-    width: 98,
-    height: 98,
-    borderRadius: 49,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   cardAvatarWrapper: {
-    width: 86,
-    height: 86,
-    borderRadius: 43,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
     padding: 3,
-    marginBottom: 0,
   },
   cardAvatarImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 84,
+    height: 84,
+    borderRadius: 42,
     borderWidth: 2,
     borderColor: '#FFFFFF',
   },
   cardAvatarPlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 84,
+    height: 84,
+    borderRadius: 42,
     backgroundColor: 'rgba(0, 0, 0, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1183,70 +1335,84 @@ const styles = StyleSheet.create({
     borderColor: '#FFFFFF',
   },
   cardNameText: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 26,
+    fontWeight: '600',
     color: '#FFFFFF',
-    fontFamily: 'Inter_700Bold',
-    marginTop: 16,
-    marginBottom: 8,
+    fontFamily: 'Inter_600SemiBold',
+    marginTop: 20,
+    marginBottom: 12,
     textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   cardSpecialtyBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    gap: 6,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    gap: 8,
+    alignSelf: 'center',
+    shadowColor: 'rgba(0, 0, 0, 0.1)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   cardSpecialtyText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '500',
     color: '#FFFFFF',
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: 'Inter_500Medium',
   },
   sectionLabel: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#999999',
-    marginBottom: 12,
+    fontWeight: '600',
+    color: '#64748B',
+    marginBottom: 16,
     letterSpacing: 1,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: 'Inter_600SemiBold',
   },
   cardInfoSection: {
     paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 16,
+    paddingTop: 24,
+    paddingBottom: 20,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.06)',
+    borderBottomColor: '#F1F5F9',
   },
   cardInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   cardInfoIconContainer: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(0, 102, 204, 0.08)',
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#EBF5FF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 14,
+    shadowColor: '#0066CC',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
   },
   cardInfoText: {
-    fontSize: 14,
-    color: '#333333',
+    fontSize: 16,
+    color: '#334155',
     fontWeight: '500',
     fontFamily: 'Inter_500Medium',
   },
   qrCodeSection: {
-    padding: 20,
+    padding: 24,
     alignItems: 'center',
-    paddingBottom: 10,
+    paddingBottom: 20,
   },
   qrCodeTopRow: {
     flexDirection: 'row',
@@ -1255,35 +1421,42 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   qrCodeTitle: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#333333',
+    color: '#334155',
     fontFamily: 'Inter_600SemiBold',
-    marginRight: 12,
+    marginRight: 14,
   },
   qrCodeDivider: {
     flex: 1,
     height: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.08)',
+    backgroundColor: '#E2E8F0',
   },
   qrCodeBorder: {
     padding: 12,
     borderRadius: 16,
-    backgroundColor: '#F7F9FC',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.06)',
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 3,
   },
   qrCodeContainer: {
-    padding: 12,
+    padding: 8,
     backgroundColor: '#FFFFFF',
     borderRadius: 8,
   },
   qrCodeDescription: {
-    fontSize: 13,
-    color: '#666666',
+    fontSize: 14,
+    color: '#64748B',
     fontFamily: 'Inter_400Regular',
-    marginTop: 12,
+    marginTop: 16,
     textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: 8,
   },
   singleActionButton: {
     flexDirection: 'row',
@@ -1291,22 +1464,116 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#0066CC',
     paddingVertical: 14,
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     marginHorizontal: 24,
-    marginVertical: 16,
-    borderRadius: 12,
+    marginVertical: 20,
+    borderRadius: 14,
+    gap: 10,
     shadowColor: '#0066CC',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-    gap: 8,
+    shadowRadius: 6,
+    elevation: 5,
   },
   cardActionText: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
     fontFamily: 'Inter_600SemiBold',
+  },
+  avatarOuterRing: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarRing: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarWrapper: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    padding: 3,
+  },
+  avatarPlaceholder: {
+    width: 74,
+    height: 74,
+    borderRadius: 37,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  avatarPlaceholderText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    fontFamily: 'Inter_600SemiBold',
+  },
+  nameText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+    fontFamily: 'Inter_600SemiBold',
+    marginBottom: 4,
+  },
+  statsRowCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+    paddingHorizontal: 16,
+  },
+  statItemCompact: {
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  statNumberCompact: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#334155',
+    fontFamily: 'Inter_600SemiBold',
+  },
+  statLabelCompact: {
+    fontSize: 12,
+    color: '#64748B',
+    fontFamily: 'Inter_400Regular',
+    marginTop: 2,
+  },
+  statDividerCompact: {
+    height: 20,
+    width: 1,
+    backgroundColor: '#E2E8F0',
+    marginHorizontal: 8,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  contentContainer: {
+    paddingBottom: 20,
+  },
+  errorText: {
+    fontSize: 15,
+    color: '#EF4444',
+    marginBottom: 12,
+    fontFamily: 'Inter_500Medium',
+    textAlign: 'center',
   },
 });
 
