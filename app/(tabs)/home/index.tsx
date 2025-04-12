@@ -6,6 +6,7 @@ import { useFeedStore, Post } from '@/stores/useFeedStore';
 import { supabase } from '@/lib/supabase';
 import { formatDistanceToNow } from 'date-fns';
 import * as Haptics from 'expo-haptics';
+import { Easing } from 'react-native-reanimated';
 import CommentModal from '../../components/CommentModal';
 import RepostModal from '../../components/RepostModal';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
