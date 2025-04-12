@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Stack, useRouter, usePathname, Slot } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
@@ -9,6 +9,7 @@ import { View, StyleSheet, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Linking from 'expo-linking';
 import { handleAuthRedirect } from '@/lib/supabase';
+import { sessionManager } from '@/lib/sessionManager';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 
 // Create our linking configuration for deep links
@@ -101,9 +102,12 @@ function AuthRedirector() {
   const router = useRouter();
   const pathname = usePathname();
   
+  // Add a ref to track if redirection has already been handled
+  const redirectHandled = useRef(false);
+  
   useEffect(() => {
-    // Skip redirect during loading
-    if (isLoading) return;
+    // Skip redirect during loading or if already handled
+    if (isLoading || redirectHandled.current) return;
     
     console.log("AuthRedirector: Current path =", pathname, "isAuthenticated =", isAuthenticated);
     
@@ -116,9 +120,11 @@ function AuthRedirector() {
     // Allow navigation to sign-up even if not authenticated
     if (!isAuthenticated && !isAuthPath && !isRootPath && !isOnboardingPath && !isSignUpPath) {
       console.log("AuthRedirector: Not authenticated, redirecting to sign-in");
+      redirectHandled.current = true;
       router.replace('/(auth)/sign-in');
     } else if (isAuthenticated && isAuthPath && pathname !== '/sign-up') {
       console.log("AuthRedirector: Already authenticated, redirecting to home");
+      redirectHandled.current = true;
       router.replace('/home');
     }
   }, [isAuthenticated, isLoading, pathname]);
@@ -133,6 +139,8 @@ function AuthRedirector() {
 export default function RootLayout() {
   useFrameworkReady();
   const checkAuth = useAuthStore(state => state.checkAuth);
+  // Ref to prevent multiple auth checks
+  const authCheckComplete = useRef(false);
 
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
@@ -142,14 +150,21 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    // Start loading auth state immediately
+    // Start loading auth state immediately, but only once
     const loadAuth = async () => {
+      if (authCheckComplete.current) {
+        console.log("RootLayout: Auth check already completed, skipping");
+        return;
+      }
+      
       try {
         console.log("RootLayout: Checking authentication status...");
+        authCheckComplete.current = true;
         await checkAuth();
         console.log("RootLayout: Authentication check complete");
       } catch (error) {
         console.error('Error checking auth:', error);
+        authCheckComplete.current = false; // Reset on error to allow retry
       }
     };
     loadAuth();

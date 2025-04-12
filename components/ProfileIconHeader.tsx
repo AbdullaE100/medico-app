@@ -1,131 +1,83 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   TouchableOpacity, 
   View, 
   StyleSheet, 
-  Platform, 
-  Animated,
-  Dimensions
+  Platform,
+  Image,
+  Alert
 } from 'react-native';
 import { User } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useProfileStore } from '@/stores/useProfileStore';
-import ProfileSlidingPanel from './ProfileSlidingPanel';
-
-const { width } = Dimensions.get('window');
-
-// Track whether the panel is currently visible across app instances
-let isPanelVisibleGlobal = false;
+import ProfileSlidingPanel from '@/components/ProfileSlidingPanel';
 
 interface ProfileIconHeaderProps {
   inHeader?: boolean; // If true, renders just the icon for injection into existing headers
 }
 
-export const ProfileIconHeader: React.FC<ProfileIconHeaderProps> = ({ inHeader = false }) => {
+const ProfileIconHeader: React.FC<ProfileIconHeaderProps> = ({ inHeader = false }) => {
   const router = useRouter();
   const { profile, fetchProfile } = useProfileStore();
   const [isPanelVisible, setIsPanelVisible] = useState(false);
   
-  // Use a single animation value for all effects to avoid conflicts
-  const animatedValue = useRef(new Animated.Value(0)).current;
+  // Add useEffect to track panel visibility changes
+  useEffect(() => {
+    console.log('isPanelVisible changed to:', isPanelVisible);
+  }, [isPanelVisible]);
   
   // Load profile data on mount
   useEffect(() => {
     loadProfileData();
   }, []);
   
-  const loadProfileData = useCallback(async () => {
+  const loadProfileData = async () => {
     try {
       await fetchProfile();
     } catch (error) {
       console.error('Error loading profile data in header:', error);
     }
-  }, [fetchProfile]);
-
-  // Animate the icon when component mounts
-  useEffect(() => {
-    // Simple fade in and scale up animation
-    Animated.timing(animatedValue, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  }, []);
-
-  // Separate press animation
-  const handlePressAnimation = () => {
-    Animated.sequence([
-      // Scale down slightly
-      Animated.timing(animatedValue, {
-        toValue: 0.92,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-      // Spring back
-      Animated.spring(animatedValue, {
-        toValue: 1,
-        friction: 4,
-        tension: 40,
-        useNativeDriver: true,
-      })
-    ]).start();
   };
 
   const handleProfilePress = () => {
-    // Prevent multiple panels from being opened simultaneously
-    if (isPanelVisibleGlobal) {
-      return;
-    }
-
-    handlePressAnimation();
-    
-    // Update global state
-    isPanelVisibleGlobal = true;
-    
-    // Set local state after animation delay
-    setTimeout(() => {
+    console.log('Profile icon pressed, showing panel with userId:', profile?.id);
+    console.log('Current isPanelVisible state before change:', isPanelVisible);
+    if (!profile?.id) {
+      console.warn('No profile id available, attempting to fetch profile first');
+      loadProfileData().then(() => {
+        console.log('Profile data loaded, now showing panel with userId:', profile?.id);
+        setIsPanelVisible(true);
+        console.log('Set isPanelVisible to true');
+      }).catch(error => {
+        console.error('Failed to load profile data:', error);
+        // Show panel anyway as a fallback
+        setIsPanelVisible(true);
+        console.log('Set isPanelVisible to true (after error)');
+      });
+    } else {
       setIsPanelVisible(true);
-    }, 10);
+      console.log('Set isPanelVisible to true (direct path)');
+    }
   };
 
-  const handleClosePanel = useCallback(() => {
+  const handleClosePanel = () => {
+    console.log('Closing panel');
     setIsPanelVisible(false);
-    
-    // Reset global state with slight delay to prevent immediate reopening
-    setTimeout(() => {
-      isPanelVisibleGlobal = false;
-    }, 300);
-  }, []);
-
-  // Derived animated styles
-  const opacity = animatedValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1]
-  });
-  
-  const scale = animatedValue.interpolate({
-    inputRange: [0, 0.92, 1],
-    outputRange: [0.8, 0.92, 1],
-    extrapolate: 'clamp'
-  });
+  };
 
   // If this component is being used inside an existing header
   if (inHeader) {
     return (
       <>
-        <Animated.View style={[
-          styles.iconContainerInline,
-          {
-            opacity,
-            transform: [{ scale }]
-          }
-        ]}>
+        <View style={styles.iconContainerInline}>
           <TouchableOpacity
             onPress={handleProfilePress}
             style={styles.iconButton}
-            activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            activeOpacity={0.6}
+            hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+            pressRetentionOffset={{ top: 20, bottom: 20, left: 20, right: 20 }}
+            delayPressIn={0}
           >
             <LinearGradient
               colors={['#0066CC', '#0091FF']}
@@ -134,7 +86,7 @@ export const ProfileIconHeader: React.FC<ProfileIconHeaderProps> = ({ inHeader =
               end={{ x: 1, y: 1 }}
             >
               {profile?.avatar_url ? (
-                <Animated.Image
+                <Image
                   source={{ uri: profile.avatar_url }}
                   style={styles.avatarImage}
                   resizeMode="cover"
@@ -144,14 +96,13 @@ export const ProfileIconHeader: React.FC<ProfileIconHeaderProps> = ({ inHeader =
               )}
             </LinearGradient>
           </TouchableOpacity>
-        </Animated.View>
+        </View>
 
-        {isPanelVisible && (
-          <ProfileSlidingPanel 
-            isVisible={isPanelVisible}
-            onClose={handleClosePanel}
-          />
-        )}
+        <ProfileSlidingPanel 
+          isVisible={isPanelVisible}
+          onClose={handleClosePanel}
+          userId={profile?.id || ''}
+        />
       </>
     );
   }
@@ -160,45 +111,38 @@ export const ProfileIconHeader: React.FC<ProfileIconHeaderProps> = ({ inHeader =
   return (
     <>
       <View style={styles.container}>
-        <Animated.View style={[
-          styles.iconContainer,
-          {
-            opacity,
-            transform: [{ scale }]
-          }
-        ]}>
-          <TouchableOpacity
-            onPress={handleProfilePress}
-            style={styles.iconButton}
-            activeOpacity={0.7}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        <TouchableOpacity
+          onPress={handleProfilePress}
+          style={styles.iconButton}
+          activeOpacity={0.6}
+          hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+          pressRetentionOffset={{ top: 20, bottom: 20, left: 20, right: 20 }}
+          delayPressIn={0}
+        >
+          <LinearGradient
+            colors={['#0066CC', '#0091FF']}
+            style={styles.iconGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
           >
-            <LinearGradient
-              colors={['#0066CC', '#0091FF']}
-              style={styles.iconGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              {profile?.avatar_url ? (
-                <Animated.Image
-                  source={{ uri: profile.avatar_url }}
-                  style={styles.avatarImage}
-                  resizeMode="cover"
-                />
-              ) : (
-                <User size={22} color="#FFFFFF" />
-              )}
-            </LinearGradient>
-          </TouchableOpacity>
-        </Animated.View>
+            {profile?.avatar_url ? (
+              <Image
+                source={{ uri: profile.avatar_url }}
+                style={styles.avatarImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <User size={22} color="#FFFFFF" />
+            )}
+          </LinearGradient>
+        </TouchableOpacity>
       </View>
       
-      {isPanelVisible && (
-        <ProfileSlidingPanel 
-          isVisible={isPanelVisible}
-          onClose={handleClosePanel}
-        />
-      )}
+      <ProfileSlidingPanel 
+        isVisible={isPanelVisible}
+        onClose={handleClosePanel}
+        userId={profile?.id || ''}
+      />
     </>
   );
 };
@@ -210,17 +154,11 @@ const styles = StyleSheet.create({
     right: 16,
     zIndex: 999,
   },
-  iconContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
   iconContainerInline: {
     width: 42,
     height: 42,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
   },
   iconButton: {
     shadowColor: '#000',

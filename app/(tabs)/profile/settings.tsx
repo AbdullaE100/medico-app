@@ -1,11 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Switch, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Switch, Pressable, Alert, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Bell, Lock, MessageCircle, Shield, HelpCircle, LogOut } from 'lucide-react-native';
+import { Bell, Lock, MessageCircle, Shield, HelpCircle, LogOut, ArrowLeft } from 'lucide-react-native';
 import { useProfileStore } from '@/stores/useProfileStore';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { ErrorMessage } from '@/components/ErrorMessage';
+import { Stack } from 'expo-router';
 
 type SettingSection = {
   title: string;
@@ -104,72 +105,88 @@ export default function Settings() {
   }
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {error && (
-        <ErrorMessage 
-          message={error} 
-          onDismiss={() => useProfileStore.setState({ error: null })}
-        />
-      )}
+    <View style={{ flex: 1, backgroundColor: '#F8F9FA' }}>
+      <Stack.Screen options={{ headerShown: false }} />
+      
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => {
+          console.log("Back button clicked in settings");
+          // Use direct navigation instead of back to prevent reloading issues
+          router.replace('/(tabs)/profile');
+        }}>
+          <ArrowLeft size={24} color="#111827" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Settings</Text>
+        <View style={{width: 40}} />
+      </View>
+      
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        {error && (
+          <ErrorMessage 
+            message={error} 
+            onDismiss={() => useProfileStore.setState({ error: null })}
+          />
+        )}
 
-      {SETTINGS.map((section) => (
-        <View key={section.title} style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <section.icon size={20} color="#1A1A1A" />
-            <Text style={styles.sectionTitle}>{section.title}</Text>
-          </View>
-          <View style={styles.sectionContent}>
-            {section.options.map((option) => (
-              <View key={option.label} style={styles.settingItem}>
-                <View style={styles.settingInfo}>
-                  <Text style={styles.settingLabel}>{option.label}</Text>
-                  {option.description && (
-                    <Text style={styles.settingDescription}>{option.description}</Text>
+        {SETTINGS.map((section) => (
+          <View key={section.title} style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <section.icon size={20} color="#1A1A1A" />
+              <Text style={styles.sectionTitle}>{section.title}</Text>
+            </View>
+            <View style={styles.sectionContent}>
+              {section.options.map((option) => (
+                <View key={option.label} style={styles.settingItem}>
+                  <View style={styles.settingInfo}>
+                    <Text style={styles.settingLabel}>{option.label}</Text>
+                    {option.description && (
+                      <Text style={styles.settingDescription}>{option.description}</Text>
+                    )}
+                  </View>
+                  {option.type === 'toggle' && option.key && (
+                    <Switch
+                      value={option.value}
+                      onValueChange={(value) => handleToggle(option.key!, value)}
+                      trackColor={{ false: '#E5E5E5', true: '#0066CC' }}
+                      thumbColor="#FFFFFF"
+                    />
+                  )}
+                  {option.type === 'select' && (
+                    <Pressable 
+                      style={styles.selectButton}
+                      onPress={() => Alert.alert('Coming Soon', 'This feature will be available soon!')}
+                    >
+                      <Text style={styles.selectButtonText}>
+                        {settings?.allow_messages_from || 'Everyone'}
+                      </Text>
+                    </Pressable>
+                  )}
+                  {option.type === 'action' && option.action && (
+                    <Pressable style={styles.actionButton} onPress={option.action}>
+                      <Text style={styles.actionButtonText}>Configure</Text>
+                    </Pressable>
                   )}
                 </View>
-                {option.type === 'toggle' && option.key && (
-                  <Switch
-                    value={option.value}
-                    onValueChange={(value) => handleToggle(option.key!, value)}
-                    trackColor={{ false: '#E5E5E5', true: '#0066CC' }}
-                    thumbColor="#FFFFFF"
-                  />
-                )}
-                {option.type === 'select' && (
-                  <Pressable 
-                    style={styles.selectButton}
-                    onPress={() => Alert.alert('Coming Soon', 'This feature will be available soon!')}
-                  >
-                    <Text style={styles.selectButtonText}>
-                      {settings?.allow_messages_from || 'Everyone'}
-                    </Text>
-                  </Pressable>
-                )}
-                {option.type === 'action' && option.action && (
-                  <Pressable style={styles.actionButton} onPress={option.action}>
-                    <Text style={styles.actionButtonText}>Configure</Text>
-                  </Pressable>
-                )}
-              </View>
-            ))}
+              ))}
+            </View>
           </View>
-        </View>
-      ))}
+        ))}
 
-      <View style={styles.helpSection}>
-        <Pressable 
-          style={styles.helpButton}
-          onPress={() => Alert.alert('Help & Support', 'Contact us at support@medical.network')}
-        >
-          <HelpCircle size={20} color="#666666" />
-          <Text style={styles.helpButtonText}>Help & Support</Text>
-        </Pressable>
-        <Pressable style={styles.logoutButton} onPress={handleSignOut}>
-          <LogOut size={20} color="#CC0000" />
-          <Text style={styles.logoutButtonText}>Log Out</Text>
-        </Pressable>
-      </View>
-    </ScrollView>
+        <View style={styles.helpSection}>
+          <Pressable 
+            style={styles.helpButton}
+            onPress={() => Alert.alert('Help & Support', 'Contact us at support@medical.network')}
+          >
+            <HelpCircle size={20} color="#666666" />
+            <Text style={styles.helpButtonText}>Help & Support</Text>
+          </Pressable>
+          <Pressable style={styles.logoutButton} onPress={handleSignOut}>
+            <LogOut size={20} color="#CC0000" />
+            <Text style={styles.logoutButtonText}>Log Out</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -177,6 +194,28 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8F9FA',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    paddingTop: 60,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5E5',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#111827',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
   },
   section: {
     backgroundColor: '#FFFFFF',

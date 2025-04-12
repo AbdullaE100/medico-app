@@ -6,10 +6,8 @@ import Animated, {
   withTiming, 
   withRepeat, 
   withSequence,
-  withDelay,
   Easing
 } from 'react-native-reanimated';
-import Svg, { Path, G, Circle } from 'react-native-svg';
 
 interface LoadingOverlayProps {
   message?: string;
@@ -17,138 +15,103 @@ interface LoadingOverlayProps {
 
 export function LoadingOverlay({ message = 'Loading...' }: LoadingOverlayProps) {
   // Animation values
-  const stethoscopeScale = useSharedValue(1);
-  const heartbeatOpacity = useSharedValue(0.6);
-  const heartbeatScale = useSharedValue(1);
-  const lineProgress = useSharedValue(0);
+  const opacity = useSharedValue(0.9);
+  const scale = useSharedValue(1);
+  const heartBeat = useSharedValue(1);
+  const glow = useSharedValue(0);
 
   // Setup animations
   useEffect(() => {
-    // Stethoscope subtle bounce
-    stethoscopeScale.value = withRepeat(
+    // Heartbeat animation - mimics real cardiac rhythm
+    heartBeat.value = withRepeat(
       withSequence(
-        withTiming(1.05, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0.95, { duration: 1000, easing: Easing.inOut(Easing.ease) })
+        // First beat
+        withTiming(1.15, { duration: 150, easing: Easing.bezier(0.37, 0, 0.63, 1) }),
+        withTiming(0.9, { duration: 150, easing: Easing.bezier(0.37, 0, 0.63, 1) }),
+        withTiming(1, { duration: 300, easing: Easing.bezier(0.37, 0, 0.63, 1) }),
+        // Short pause
+        withTiming(1, { duration: 200 }),
+        // Second beat (slightly smaller)
+        withTiming(1.08, { duration: 150, easing: Easing.bezier(0.37, 0, 0.63, 1) }),
+        withTiming(0.95, { duration: 150, easing: Easing.bezier(0.37, 0, 0.63, 1) }),
+        withTiming(1, { duration: 300, easing: Easing.bezier(0.37, 0, 0.63, 1) }),
+        // Rest period
+        withTiming(1, { duration: 600 })
+      ),
+      -1, // Infinite repeat
+      false // Don't reverse
+    );
+
+    // Subtle container animation
+    scale.value = withRepeat(
+      withSequence(
+        withTiming(1.03, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) })
       ),
       -1, // Infinite repeat
       true // Reverse
     );
 
-    // Heartbeat animation
-    const animateHeartbeat = () => {
-      heartbeatScale.value = withSequence(
-        withTiming(1.3, { duration: 150, easing: Easing.out(Easing.ease) }),
-        withTiming(1, { duration: 150, easing: Easing.inOut(Easing.ease) }),
-        withDelay(
-          100,
-          withTiming(1.3, { duration: 150, easing: Easing.out(Easing.ease) })
-        ),
-        withTiming(1, { duration: 300, easing: Easing.inOut(Easing.ease) }),
-        withDelay(1000, withTiming(1, { duration: 0 }))
-      );
-
-      heartbeatOpacity.value = withSequence(
-        withTiming(1, { duration: 150 }),
-        withTiming(0.7, { duration: 150 }),
-        withDelay(
-          100,
-          withTiming(1, { duration: 150 })
-        ),
-        withTiming(0.6, { duration: 300 }),
-        withDelay(1000, withTiming(0.6, { duration: 0 }))
-      );
-    };
-
-    // Line animation (EKG effect)
-    lineProgress.value = withRepeat(
-      withTiming(1, { duration: 2000, easing: Easing.linear }),
-      -1,
-      false
+    // Glow effect that pulses with heartbeat
+    glow.value = withRepeat(
+      withSequence(
+        withTiming(6, { duration: 150, easing: Easing.bezier(0.37, 0, 0.63, 1) }),
+        withTiming(1, { duration: 450, easing: Easing.bezier(0.37, 0, 0.63, 1) }),
+        withTiming(4, { duration: 150, easing: Easing.bezier(0.37, 0, 0.63, 1) }),
+        withTiming(1, { duration: 1250, easing: Easing.bezier(0.37, 0, 0.63, 1) })
+      ),
+      -1, // Infinite repeat
+      false // Don't reverse
     );
-
-    // Start heartbeat animation and repeat it
-    const interval = setInterval(animateHeartbeat, 2000);
-    animateHeartbeat(); // Start immediately
-
-    return () => clearInterval(interval);
   }, []);
 
   // Animated styles
-  const stethoscopeAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: stethoscopeScale.value }]
+  const heartAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: heartBeat.value }
+    ]
   }));
 
-  const heartbeatAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: heartbeatOpacity.value,
-    transform: [{ scale: heartbeatScale.value }]
+  const containerAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }]
   }));
 
-  const lineAnimatedStyle = useAnimatedStyle(() => ({
-    width: `${lineProgress.value * 100}%`
+  const glowAnimatedStyle = useAnimatedStyle(() => ({
+    shadowOpacity: 0.35 + (glow.value * 0.05),
+    shadowRadius: 16 + glow.value,
+  }));
+
+  const messageAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
   }));
 
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <View style={styles.animationContainer}>
-          {/* Stethoscope Icon */}
-          <Animated.View style={[styles.stethoscopeContainer, stethoscopeAnimatedStyle]}>
-            <Svg width={50} height={50} viewBox="0 0 24 24" fill="none">
-              <G>
-                {/* Stethoscope */}
-                <Path
-                  d="M4.5 12.5V10C4.5 6.5 7.5 3.5 11 3.5C14.5 3.5 17.5 6.5 17.5 10V12.5"
-                  stroke="#0066CC"
-                  strokeWidth={1.5}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <Path
-                  d="M17.5 11.5C17.5 12.5 18.5 13.5 19.5 13.5C20.5 13.5 21.5 12.5 21.5 11.5C21.5 10.5 20.5 9.5 19.5 9.5C18.5 9.5 17.5 10.5 17.5 11.5Z"
-                  stroke="#0066CC"
-                  strokeWidth={1.5}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <Path
-                  d="M13 18.5C13 19.5 14 20.5 15 20.5C16 20.5 17 19.5 17 18.5C17 17.5 16 16.5 15 16.5C14 16.5 13 17.5 13 18.5Z"
-                  stroke="#0066CC"
-                  strokeWidth={1.5}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <Path
-                  d="M17.5 13.5V16.5C17.5 16.5 17.5 16.5 17.5 16.5"
-                  stroke="#0066CC"
-                  strokeWidth={1.5}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </G>
-            </Svg>
-          </Animated.View>
-
-          {/* Heartbeat / EKG Line */}
-          <View style={styles.heartbeatLineContainer}>
-            <Animated.View style={[styles.heartbeatLine, heartbeatAnimatedStyle]}>
-              <Svg height={30} width={120} viewBox="0 0 120 30">
-                <Path
-                  d="M0,15 L20,15 L30,5 L40,25 L50,5 L60,25 L70,15 L120,15"
-                  fill="none"
-                  stroke="#0066CC"
-                  strokeWidth={2}
-                />
-              </Svg>
+        <Animated.View style={[styles.logoContainer, containerAnimatedStyle, glowAnimatedStyle]}>
+          <View style={styles.logoBackground}>
+            <Animated.View style={[styles.heartContainer, heartAnimatedStyle]}>
+              <View style={styles.heartShape}>
+                <View style={styles.heartLeftCurve} />
+                <View style={styles.heartRightCurve} />
+              </View>
             </Animated.View>
+            
+            {/* ECG Line */}
+            <View style={styles.ecgLineContainer}>
+              <View style={styles.ecgLine}>
+                <View style={styles.ecgLinePart} />
+                <View style={styles.ecgPeak} />
+                <View style={styles.ecgLinePart} />
+              </View>
+            </View>
           </View>
-
-          {/* Progress line */}
-          <View style={styles.progressLineContainer}>
-            <Animated.View style={[styles.progressLine, lineAnimatedStyle]} />
-          </View>
-        </View>
+        </Animated.View>
         
-        <Text style={styles.message}>{message}</Text>
+        <Animated.Text style={[styles.message, messageAnimatedStyle]}>
+          {message}
+        </Animated.Text>
       </View>
     </View>
   );
@@ -157,58 +120,110 @@ export function LoadingOverlay({ message = 'Loading...' }: LoadingOverlayProps) 
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: 'rgba(255, 255, 255, 0.97)',
     justifyContent: 'center',
     alignItems: 'center',
+    backdropFilter: 'blur(10px)',
   },
   content: {
     alignItems: 'center',
-    gap: 16,
+    gap: 32,
+  },
+  logoContainer: {
+    width: 130,
+    height: 130,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#FF3366',
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  logoBackground: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: 'white',
-    padding: 24,
-    borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 2,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+    position: 'relative',
   },
-  animationContainer: {
-    height: 100,
+  heartContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 60,
+    height: 54,
+  },
+  heartShape: {
+    width: 30,
+    height: 30,
+    backgroundColor: '#FF3366',
+    transform: [{ rotate: '45deg' }],
+    position: 'relative',
+  },
+  heartLeftCurve: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#FF3366',
+    position: 'absolute',
+    top: -15,
+    left: 0,
+  },
+  heartRightCurve: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#FF3366',
+    position: 'absolute',
+    top: 0,
+    left: -15,
+  },
+  ecgLineContainer: {
+    position: 'absolute',
+    bottom: 30,
+    width: 100,
+    height: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stethoscopeContainer: {
-    marginBottom: 10,
+  ecgLine: {
+    flexDirection: 'row',
     alignItems: 'center',
-  },
-  heartbeatLineContainer: {
-    height: 30,
     justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
+    height: 20,
   },
-  heartbeatLine: {
-    height: 30,
+  ecgLinePart: {
+    width: 30,
+    height: 1,
+    backgroundColor: 'rgba(255, 51, 102, 0.2)',
   },
-  progressLineContainer: {
-    width: 120,
-    height: 2,
-    backgroundColor: 'rgba(0, 102, 204, 0.2)',
-    borderRadius: 1,
-    marginTop: 5,
-  },
-  progressLine: {
-    height: '100%',
-    backgroundColor: '#0066CC',
-    borderRadius: 1,
+  ecgPeak: {
+    width: 16,
+    height: 16,
+    borderColor: 'rgba(255, 51, 102, 0.2)',
+    borderWidth: 1,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+    transform: [{ rotate: '45deg' }],
   },
   message: {
     fontSize: 16,
     fontFamily: 'Inter_500Medium',
-    color: '#666666',
-  },
+    color: '#333333',
+    textAlign: 'center',
+    letterSpacing: 0.3,
+  }
 });

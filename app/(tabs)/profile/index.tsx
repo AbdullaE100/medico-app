@@ -28,7 +28,8 @@ import {
   Briefcase,
   GraduationCap,
   Calendar,
-  Plus
+  Plus,
+  ChevronLeft
 } from 'lucide-react-native';
 import { useProfileStore } from '@/stores/useProfileStore';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
@@ -163,6 +164,15 @@ export default function ProfileScreen() {
         <View style={styles.headerDecoration1} />
         <View style={styles.headerDecoration2} />
       </LinearGradient>
+      
+      {/* Back Button */}
+      <TouchableOpacity 
+        style={styles.backButton} 
+        onPress={() => router.back()}
+        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+      >
+        <ChevronLeft size={24} color="#FFFFFF" />
+      </TouchableOpacity>
       
       <ScrollView 
         style={styles.scrollView}
@@ -1042,5 +1052,22 @@ const styles = StyleSheet.create({
   },
   activeIcon: {
     opacity: 0.9,
+  },
+  backButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 30,
+    left: 16,
+    zIndex: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 4,
   },
 });

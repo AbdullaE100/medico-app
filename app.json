@@ -3,7 +3,6 @@
     "name": "Medical Network",
     "slug": "medical-network",
     "version": "1.0.0",
-    "newArchEnabled": true,
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "medico",
@@ -19,7 +18,6 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.medical.network",
-      "newArchEnabled": true,
       "permissions": ["NOTIFICATIONS"],
       "associatedDomains": ["applinks:auth.medico-app.com", "applinks:cslxbdtaxirqfozfvjhg.supabase.co"]
     },
@@ -29,7 +27,6 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.medical.network",
-      "newArchEnabled": true,
       "permissions": ["NOTIFICATIONS"],
       "intentFilters": [
         {
@@ -81,9 +78,6 @@
       "router": {
         "origin": false
       },
-      "eas": {
-        "projectId": "your-project-id"
-      },
       "googleClientId": "747216005042-v9de9l8vqkm308q1q0rfofskeerbotjq.apps.googleusercontent.com",
       "supabaseUrl": "https://cslxbdtaxirqfozfvjhg.supabase.co",
       "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNzbHhiZHRheGlycWZvemZ2amhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE2MDcwODgsImV4cCI6MjA1NzE4MzA4OH0.Hj59fQGPZq7WO2aaE45xIwX5WrJ8RNk2UkuzVIcnV9I"
@@ -94,13 +88,6 @@
       "androidMode": "default",
       "androidCollapsedTitle": "Medico",
       "iosDisplayInForeground": false
-    },
-    "owner": "your-expo-username",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/your-project-id"
     }
   }
 }

@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, Pressable, Share, Alert, TouchableOpacity, Dimensions, Platform, Animated, Easing } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { MapPin, Building2, Users, MessageCircle, UserPlus, Share2, UserCheck, User as UserIcon, Stethoscope, Clock } from 'lucide-react-native';
+import { MapPin, Building2, Users, MessageCircle, UserPlus, Share2, UserCheck, User as UserIcon, Stethoscope, Clock, GraduationCap, Briefcase } from 'lucide-react-native';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useChatStore } from '@/stores/useChatStore';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Education, WorkExperience } from '@/types/database';
 
 const { width, height } = Dimensions.get('window');
 
@@ -179,54 +180,36 @@ export default function DoctorProfile() {
         </Animated.View>
 
         {/* Action Buttons */}
-        <Animated.View 
-          style={[
-            styles.actions,
-            { 
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }]
-            }
-          ]}
-        >
+        <View style={styles.actions}>
           <Pressable
             style={[styles.actionButton, isFollowing && styles.actionButtonOutline]}
             onPress={handleFollow}
           >
             {isFollowing ? (
-              <>
-                <UserCheck size={20} color="#0066CC" />
-                <Text style={[styles.actionButtonText, styles.actionButtonTextOutline]}>
-                  Following
-                </Text>
-              </>
+              <UserCheck size={18} color="#0066CC" />
             ) : (
-              <>
-                <UserPlus size={20} color="#FFFFFF" />
-                <Text style={styles.actionButtonText}>Follow</Text>
-              </>
+              <UserPlus size={18} color="#FFFFFF" />
             )}
+            <Text
+              style={[
+                styles.actionButtonText,
+                isFollowing && styles.actionButtonTextOutline,
+              ]}
+            >
+              {isFollowing ? "Connected" : "Connect"}
+            </Text>
           </Pressable>
-
+          
           <Pressable
             style={[styles.actionButton, styles.actionButtonOutline]}
             onPress={handleMessage}
           >
-            <MessageCircle size={20} color="#0066CC" />
+            <MessageCircle size={18} color="#0066CC" />
             <Text style={[styles.actionButtonText, styles.actionButtonTextOutline]}>
               Message
             </Text>
           </Pressable>
-
-          <Pressable
-            style={[styles.actionButton, styles.actionButtonOutline]}
-            onPress={handleShare}
-          >
-            <Share2 size={20} color="#0066CC" />
-            <Text style={[styles.actionButtonText, styles.actionButtonTextOutline]}>
-              Share
-            </Text>
-          </Pressable>
-        </Animated.View>
+        </View>
 
         {/* Additional Info Cards */}
         <Animated.View 
@@ -294,6 +277,72 @@ export default function DoctorProfile() {
                 </View>
               ))}
             </View>
+          </Animated.View>
+        )}
+
+        {/* Education */}
+        {doctor.education?.length > 0 && (
+          <Animated.View 
+            style={[
+              styles.sectionContainer,
+              { 
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }]
+              }
+            ]}
+          >
+            <Text style={styles.sectionTitle}>Education</Text>
+            {doctor.education.map((edu, index) => (
+              <View 
+                key={index} 
+                style={[
+                  styles.listItem, 
+                  index === doctor.education.length - 1 && styles.listItemLast
+                ]}
+              >
+                <GraduationCap size={16} color="#0066CC" style={styles.listItemIcon} />
+                <View style={styles.listItemContent}>
+                  <Text style={styles.listItemTitle}>{edu.institution}</Text>
+                  <Text style={styles.listItemSubtitle}>{edu.degree}</Text>
+                  <Text style={styles.listItemDate}>
+                    {edu.start_date} {edu.end_date ? `- ${edu.end_date}` : edu.is_current ? '- Present' : ''}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </Animated.View>
+        )}
+
+        {/* Work Experience */}
+        {doctor.work_experience?.length > 0 && (
+          <Animated.View 
+            style={[
+              styles.sectionContainer,
+              { 
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }]
+              }
+            ]}
+          >
+            <Text style={styles.sectionTitle}>Work Experience</Text>
+            {doctor.work_experience.map((work, index) => (
+              <View 
+                key={index} 
+                style={[
+                  styles.listItem, 
+                  index === doctor.work_experience.length - 1 && styles.listItemLast
+                ]}
+              >
+                <Briefcase size={16} color="#0066CC" style={styles.listItemIcon} />
+                <View style={styles.listItemContent}>
+                  <Text style={styles.listItemTitle}>{work.organization}</Text>
+                  <Text style={styles.listItemSubtitle}>{work.title}</Text>
+                  <Text style={styles.listItemDate}>
+                    {work.start_date} {work.end_date ? `- ${work.end_date}` : work.is_current ? '- Present' : ''}
+                  </Text>
+                </View>
+              </View>
+            ))}
           </Animated.View>
         )}
       </ScrollView>
@@ -535,7 +584,19 @@ const styles = StyleSheet.create({
   },
   expertiseContainer: {
     marginHorizontal: 16,
-    marginBottom: 32,
+    marginBottom: 16,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  sectionContainer: {
+    marginHorizontal: 16,
+    marginBottom: 16,
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
@@ -551,6 +612,43 @@ const styles = StyleSheet.create({
     color: '#1a1a1a',
     marginBottom: 12,
     fontFamily: 'Inter_600SemiBold',
+  },
+  listItem: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  listItemLast: {
+    marginBottom: 0,
+    paddingBottom: 0,
+    borderBottomWidth: 0,
+  },
+  listItemIcon: {
+    marginRight: 12,
+    marginTop: 2,
+  },
+  listItemContent: {
+    flex: 1,
+  },
+  listItemTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  listItemSubtitle: {
+    fontSize: 14,
+    color: '#4b5563',
+    marginBottom: 2,
+    fontFamily: 'Inter_400Regular',
+  },
+  listItemDate: {
+    fontSize: 12,
+    color: '#64748b',
+    fontFamily: 'Inter_400Regular',
   },
   tagsContainer: {
     flexDirection: 'row',

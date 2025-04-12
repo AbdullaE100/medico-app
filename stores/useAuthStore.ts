@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { supabase, handleAuthRedirect, ensureOAuthState, prepareBrowserForAuth } from '@/lib/supabase';
+import { sessionManager } from '@/lib/sessionManager';
 import { User } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
@@ -39,7 +40,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   checkAuth: async () => {
     try {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      // Use sessionManager instead of direct supabase calls
+      const { data: { session }, error: sessionError } = await sessionManager.getSession();
       if (sessionError) throw sessionError;
       
       if (!session) {
@@ -47,7 +49,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return;
       }
 
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      // Use sessionManager for getting user
+      const { data: { user }, error: userError } = await sessionManager.getUser();
       if (userError) throw userError;
       
       set({ 
@@ -321,7 +324,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             console.log("useAuthStore: OAuth authentication successful");
             
             // Fetch fresh user data
-            const { data: { user }, error: userError } = await supabase.auth.getUser();
+            const { data: { user }, error: userError } = await sessionManager.getUser();
             if (userError) throw userError;
             
             if (user) {

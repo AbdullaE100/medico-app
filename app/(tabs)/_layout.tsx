@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
     right: 10,
     left: undefined,
     width: 'auto',
-    zIndex: 1500,
+    zIndex: 5000,
   },
   headerIconsContainer: {
     flexDirection: 'row',
@@ -271,12 +271,14 @@ const styles = StyleSheet.create({
     paddingRight: 16,
     paddingBottom: 10,
     paddingLeft: 16,
+    zIndex: 1000,
   },
   headerIconsContainerHome: {
     paddingTop: 0,
     paddingRight: 0,
     paddingBottom: 0,
     gap: 8,
+    zIndex: 5000,
   },
   createTabIcon: {
     width: 36,

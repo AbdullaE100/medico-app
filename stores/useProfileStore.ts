@@ -1,7 +1,13 @@
 import { create } from 'zustand';
 import { Profile, ProfileSettings, WorkExperience, Education } from '@/types/database';
 import { supabase } from '@/lib/supabase';
+import { sessionManager } from '@/lib/sessionManager';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Constants for AsyncStorage keys
+const WORK_EXPERIENCE_KEY = 'medico_work_experience';
+const EDUCATION_KEY = 'medico_education';
 
 interface ProfileState {
   profile: Profile | null;
@@ -29,11 +35,31 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     console.log("Fetching profile data...");
     set({ isLoading: true, error: null });
     try {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      // Use sessionManager instead of direct auth calls
+      const { data: { user }, error: authError } = await sessionManager.getUser();
       if (authError) throw authError;
       if (!user) throw new Error('Not authenticated');
 
       console.log("Authenticated user ID:", user.id);
+
+      // Use safer helper function to load work experience and education from AsyncStorage
+      const workExperience = await safelyRetrieveData<WorkExperience[]>(
+        `${WORK_EXPERIENCE_KEY}_${user.id}`, 
+        []
+      );
+      const education = await safelyRetrieveData<Education[]>(
+        `${EDUCATION_KEY}_${user.id}`, 
+        []
+      );
+      
+      console.log(`Loaded ${workExperience.length} work experience items from AsyncStorage`);
+      console.log(`Loaded ${education.length} education items from AsyncStorage`);
+      
+      // Store them in state
+      set({ 
+        workExperienceData: workExperience,
+        educationData: education
+      });
 
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
@@ -54,9 +80,9 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         // Create a profile object with processed data
         profile = {
           ...profileData,
-          // Set work_experience and education from in-memory storage
-          work_experience: get().workExperienceData || [],
-          education: get().educationData || [],
+          // Use the loaded work experience and education data
+          work_experience: workExperience || [],
+          education: education || [],
           // Ensure expertise is always an array
           expertise: profileData.expertise || [],
           // Add empty metadata for backward compatibility
@@ -104,7 +130,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   updateProfile: async (data: Partial<Profile>) => {
     set({ isLoading: true, error: null });
     try {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      // Use sessionManager instead of direct auth calls
+      const { data: { user }, error: authError } = await sessionManager.getUser();
       if (authError) throw authError;
       if (!user) throw new Error('Not authenticated');
 
@@ -114,10 +141,23 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       // Make a copy of the data to avoid modifying the original
       const profileData: any = { ...data };
       
-      // Update in-memory work experience and education if provided
+      // Update work experience if provided
       if (profileData.work_experience !== undefined) {
         console.log(`Storing work_experience with ${profileData.work_experience.length} items in local state`);
         set({ workExperienceData: profileData.work_experience });
+        
+        // SAVE TO ASYNC STORAGE for persistence
+        const saved = await safelyStoreData(
+          `${WORK_EXPERIENCE_KEY}_${user.id}`, 
+          profileData.work_experience
+        );
+        
+        if (saved) {
+          console.log("Work experience saved to AsyncStorage");
+        } else {
+          console.warn("Failed to save work experience to AsyncStorage");
+        }
+        
         // Remove from direct profile update to avoid database error
         delete profileData.work_experience;
       }
@@ -126,6 +166,19 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       if (profileData.education !== undefined) {
         console.log(`Storing education with ${profileData.education.length} items in local state`);
         set({ educationData: profileData.education });
+        
+        // SAVE TO ASYNC STORAGE for persistence
+        const saved = await safelyStoreData(
+          `${EDUCATION_KEY}_${user.id}`, 
+          profileData.education
+        );
+        
+        if (saved) {
+          console.log("Education saved to AsyncStorage");
+        } else {
+          console.warn("Failed to save education to AsyncStorage");
+        }
+        
         // Remove from direct profile update to avoid database error
         delete profileData.education;
       }
@@ -273,8 +326,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       
       return true;
     } catch (error) {
-      console.error("Profile update error:", error);
-      set({ error: (error instanceof Error) ? error.message : String(error) });
+      console.error("Error updating profile:", error);
+      set({ error: (error as Error).message });
       return false;
     } finally {
       set({ isLoading: false });
@@ -284,7 +337,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   updateSettings: async (data: Partial<ProfileSettings>) => {
     set({ isLoading: true, error: null });
     try {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      const { data: { user }, error: authError } = await sessionManager.getUser();
       if (authError) throw authError;
       if (!user) throw new Error('Not authenticated');
 
@@ -310,3 +363,28 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     }
   },
 }));
+
+// Add a helper function to safely save data to AsyncStorage
+const safelyStoreData = async (key: string, data: any): Promise<boolean> => {
+  try {
+    if (data) {
+      await AsyncStorage.setItem(key, JSON.stringify(data));
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error(`Error storing data for key ${key}:`, error);
+    return false;
+  }
+};
+
+// Add a helper function to safely retrieve data from AsyncStorage
+const safelyRetrieveData = async <T>(key: string, defaultValue: T): Promise<T> => {
+  try {
+    const jsonValue = await AsyncStorage.getItem(key);
+    return jsonValue != null ? JSON.parse(jsonValue) as T : defaultValue;
+  } catch (error) {
+    console.error(`Error retrieving data for key ${key}:`, error);
+    return defaultValue;
+  }
+};

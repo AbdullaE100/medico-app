@@ -50,7 +50,8 @@ import {
   Sparkles,
   Download,
   Award,
-  UserCircle
+  UserCircle,
+  Heart
 } from 'lucide-react-native';
 import { useProfileStore } from '@/stores/useProfileStore';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -89,7 +90,6 @@ interface ExtendedProfile {
   education?: any[];
   // Additional properties used in this component
   years?: string;
-  patients?: string;
   email?: string;
 }
 
@@ -285,29 +285,32 @@ const ProfileSlidingPanel: React.FC<ProfileSlidingPanelProps> = ({
     return (
       <>
         <View style={styles.profileHeader}>
-          <LinearGradient
-            colors={['#0066CC', '#0091FF']}
-            style={styles.avatarContainer}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            {profile?.avatar_url ? (
-              <Image
-                source={{ uri: profile.avatar_url }}
-                style={styles.avatarImage}
-              />
-            ) : (
-              <User size={30} color="#FFFFFF" />
-            )}
-          </LinearGradient>
-          <View style={styles.profileInfo}>
+          <View style={styles.profileTopSection}>
+            <LinearGradient
+              colors={['#0066CC', '#0091FF']}
+              style={styles.avatarContainer}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              {profile?.avatar_url ? (
+                <Image
+                  source={{ uri: profile.avatar_url }}
+                  style={styles.avatarImage}
+                />
+              ) : (
+                <User size={30} color="#FFFFFF" />
+              )}
+            </LinearGradient>
             <Text style={styles.profileName}>
               {profile?.full_name || "Your Name"}
             </Text>
+          </View>
+          
+          {/* Specialty badge centered below name */}
+          <View style={styles.specialtyBadgeContainer}>
             <View style={styles.specialtyBadgeAlt}>
-              <Text style={styles.specialtyTextAlt}>
-                {profile?.specialty || "Healthcare Professional"}
-              </Text>
+              <Heart size={14} color="#0066CC" style={{marginRight: 4}} />
+              <Text style={styles.specialtyTextAlt}>Cardiology</Text>
             </View>
           </View>
         </View>
@@ -324,7 +327,7 @@ const ProfileSlidingPanel: React.FC<ProfileSlidingPanelProps> = ({
               <View style={styles.infoCard}>
                 <View style={styles.infoCardContent}>
                   <Stethoscope size={20} color="#0066CC" />
-                  <Text style={styles.infoItemText}>{profile.specialty}</Text>
+                  <Text style={styles.infoItemText}>Cardiology</Text>
                 </View>
               </View>
             )}
@@ -347,6 +350,14 @@ const ProfileSlidingPanel: React.FC<ProfileSlidingPanelProps> = ({
               </View>
             )}
 
+            {/* Add a certification badge here instead of in the stats row */}
+            <View style={styles.infoCard}>
+              <View style={styles.infoCardContent}>
+                <Award size={20} color="#0066CC" />
+                <Text style={styles.infoItemText}>Board Certified Cardiologist</Text>
+              </View>
+            </View>
+
             {profile?.bio && (
               <View style={styles.sectionBlock}>
                 <Text style={styles.sectionTitle}>About</Text>
@@ -368,19 +379,6 @@ const ProfileSlidingPanel: React.FC<ProfileSlidingPanelProps> = ({
                 </View>
               </View>
             )}
-          </View>
-
-          {/* Stats in a more compact row */}
-          <View style={styles.statsRowCompact}>
-            <View style={styles.statItemCompact}>
-              <Text style={styles.statNumberCompact}>{(profile as ExtendedProfile)?.patients || "0"}</Text>
-              <Text style={styles.statLabelCompact}>Patients</Text>
-            </View>
-            <View style={styles.statDividerCompact} />
-            <View style={styles.statItemCompact}>
-              <Text style={styles.statNumberCompact}>{profile?.rating || "0"}</Text>
-              <Text style={styles.statLabelCompact}>Rating</Text>
-            </View>
           </View>
         </ScrollView>
 
@@ -512,39 +510,32 @@ const ProfileSlidingPanel: React.FC<ProfileSlidingPanelProps> = ({
                 showsVerticalScrollIndicator={false}
               >
                 <View style={styles.profileHeader}>
-                  <View style={styles.avatarOuterRing}>
-                    <View style={styles.avatarRing}>
-                      <View style={styles.avatarWrapper}>
-                        {profile?.avatar_url ? (
-                          <Image
-                            source={{ uri: profile.avatar_url }}
-                            style={styles.avatarImage}
-                          />
-                        ) : (
-                          <View style={styles.avatarPlaceholder}>
-                            <Text style={styles.avatarPlaceholderText}>
-                              {getInitials(profile?.full_name || "Your Name")}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                  </View>
-                  <Text style={styles.nameText}>{profile?.full_name || "Your Name"}</Text>
-                  <View style={styles.specialtyBadgeAlt}>
-                    <Text style={styles.specialtyTextAlt}>{profile?.specialty || "Healthcare Professional"}</Text>
+                  <View style={styles.profileTopSection}>
+                    <LinearGradient
+                      colors={['#0066CC', '#0091FF']}
+                      style={styles.avatarContainer}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      {profile?.avatar_url ? (
+                        <Image
+                          source={{ uri: profile.avatar_url }}
+                          style={styles.avatarImage}
+                        />
+                      ) : (
+                        <User size={30} color="#FFFFFF" />
+                      )}
+                    </LinearGradient>
+                    <Text style={styles.profileName}>
+                      {profile?.full_name || "Your Name"}
+                    </Text>
                   </View>
                   
-                  {/* Stats in a more compact row */}
-                  <View style={styles.statsRowCompact}>
-                    <View style={styles.statItemCompact}>
-                      <Text style={styles.statNumberCompact}>{(profile as ExtendedProfile)?.patients || "0"}</Text>
-                      <Text style={styles.statLabelCompact}>Patients</Text>
-                    </View>
-                    <View style={styles.statDividerCompact} />
-                    <View style={styles.statItemCompact}>
-                      <Text style={styles.statNumberCompact}>{profile?.rating || "0"}</Text>
-                      <Text style={styles.statLabelCompact}>Rating</Text>
+                  {/* Specialty badge centered below name */}
+                  <View style={styles.specialtyBadgeContainer}>
+                    <View style={styles.specialtyBadgeAlt}>
+                      <Heart size={14} color="#0066CC" style={{marginRight: 4}} />
+                      <Text style={styles.specialtyTextAlt}>Cardiology</Text>
                     </View>
                   </View>
                 </View>
@@ -737,151 +728,120 @@ const BusinessCardModal: React.FC<BusinessCardModalProps> = ({
                     style={styles.shimmerGradient}
                   />
                 </RNAnimated.View>
-              
-                <View style={styles.cardContainer}>
+                
+                <LinearGradient 
+                  colors={['#0052B4', '#0066CC', '#1E90FF']} 
+                  style={styles.cardGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
                   {/* Card handle */}
                   <View style={styles.cardHandleContainer}>
                     <View style={styles.cardHandle} />
                   </View>
                   
-                  {/* Header Section */}
-                  <View style={styles.cardHeader}>
-                    <View style={styles.brandRow}>
-                      <Sparkles size={16} color="#0066CC" />
-                      <Text style={styles.brandText}>Digital Business Card</Text>
-                    </View>
-                    <TouchableOpacity 
-                      onPress={onClose} 
-                      style={styles.closeCardButton}
-                    >
-                      <X size={16} color="#64748B" />
-                    </TouchableOpacity>
-                  </View>
+                  {/* Close button */}
+                  <TouchableOpacity 
+                    onPress={onClose} 
+                    style={styles.closeCardButton}
+                  >
+                    <X size={16} color="#FFFFFF" />
+                  </TouchableOpacity>
                   
-                  {/* Professional header with gradient */}
-                  <View style={styles.cardBannerContainer}>
-                    <LinearGradient
-                      colors={['#0052B4', '#0066CC', '#1E90FF']}
-                      style={styles.cardBanner}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                    >
-                      {/* Avatar with border */}
-                      <View style={styles.cardAvatarOuterRing}>
-                        <View style={styles.cardAvatarRing}>
-                          <View style={styles.cardAvatarWrapper}>
-                            {profile?.avatar_url ? (
-                              <Image 
-                                source={{ uri: profile.avatar_url }} 
-                                style={styles.cardAvatarImage} 
-                              />
-                            ) : (
-                              <View style={styles.cardAvatarPlaceholder}>
-                                <User size={40} color="#FFFFFF" />
-                              </View>
-                            )}
-                          </View>
-                        </View>
-                      </View>
-                      
-                      {/* Name and specialty badge */}
-                      <Text style={styles.cardNameText}>
-                        {profile?.full_name || "Your Name"}
-                      </Text>
-                      
-                      {profile?.specialty && (
-                        <View style={styles.cardSpecialtyBadge}>
-                          <Stethoscope size={16} color="#FFFFFF" />
-                          <Text style={styles.cardSpecialtyText}>
-                            {profile.specialty}
-                          </Text>
+                  {/* Main content container */}
+                  <View style={styles.cardContentContainer}>
+                    {/* Profile avatar */}
+                    <View style={styles.cardAvatarContainer}>
+                      {profile?.avatar_url ? (
+                        <Image 
+                          source={{ uri: profile.avatar_url }} 
+                          style={styles.cardAvatarImage} 
+                        />
+                      ) : (
+                        <View style={styles.cardAvatarPlaceholder}>
+                          <User size={30} color="#FFFFFF" />
                         </View>
                       )}
-                    </LinearGradient>
-                  </View>
-                  
-                  {/* Contact Information */}
-                  <View style={styles.cardInfoSection}>
-                    <Text style={styles.sectionLabel}>CONTACT INFORMATION</Text>
+                    </View>
                     
+                    {/* Name and specialty */}
+                    <Text style={styles.cardNameText}>
+                      {profile?.full_name || "Your Name"}
+                    </Text>
+                    
+                    {/* Replace the dynamic specialty with Cardiology */}
+                    <View style={styles.cardSpecialtyBadge}>
+                      <Stethoscope size={14} color="#FFFFFF" />
+                      <Text style={styles.cardSpecialtyText}>
+                        Cardiology
+                      </Text>
+                    </View>
+                  </View>
+                </LinearGradient>
+                
+                {/* Bottom section with QR code */}
+                <View style={styles.cardBottomContainer}>
+                  {/* Contact info row - modified to include specialty badge */}
+                  <View style={styles.cardContactRow}>
                     {profile?.hospital && (
-                      <View style={styles.cardInfoRow}>
-                        <View style={styles.cardInfoIconContainer}>
-                          <Briefcase size={18} color="#0066CC" />
-                        </View>
-                        <Text style={styles.cardInfoText}>{profile.hospital}</Text>
+                      <View style={styles.cardContactItem}>
+                        <Briefcase size={14} color="#0066CC" />
+                        <Text numberOfLines={1} ellipsizeMode="tail" style={styles.cardContactText}>
+                          {profile.hospital}
+                        </Text>
                       </View>
                     )}
                     
                     {profile?.location && (
-                      <View style={styles.cardInfoRow}>
-                        <View style={styles.cardInfoIconContainer}>
-                          <MapPin size={18} color="#0066CC" />
-                        </View>
-                        <Text style={styles.cardInfoText}>{profile.location}</Text>
+                      <View style={styles.cardContactItem}>
+                        <MapPin size={14} color="#0066CC" />
+                        <Text numberOfLines={1} ellipsizeMode="tail" style={styles.cardContactText}>
+                          {profile.location}
+                        </Text>
                       </View>
                     )}
                     
-                    {/* Placeholder for email - in a real app, add if available */}
-                    <View style={styles.cardInfoRow}>
-                      <View style={styles.cardInfoIconContainer}>
-                        <Mail size={18} color="#0066CC" />
-                      </View>
-                      <Text style={styles.cardInfoText}>
-                        {profile?.email || "Connect via app"}
+                    {/* New Cardiology specialty badge */}
+                    <View style={styles.cardSpecialtyIndicator}>
+                      <View style={styles.cardSpecialtyDot} />
+                      <Text style={styles.cardSpecialtyIndicatorText}>
+                        Board Certified Cardiologist
                       </Text>
                     </View>
                   </View>
                   
-                  {/* QR Code Section */}
-                  <View style={styles.qrCodeSection}>
-                    <View style={styles.qrCodeTopRow}>
-                      <Text style={styles.qrCodeTitle}>Scan to Connect</Text>
-                      <View style={styles.qrCodeDivider} />
-                    </View>
-                    
-                    <View style={styles.qrCodeBorder}>
-                      <View style={styles.qrCodeContainer}>
-                        {/* In a real implementation, generate a QR code for the profile */}
-                        <View style={{ 
-                          width: 200, 
-                          height: 200, 
-                          backgroundColor: '#FFFFFF', 
-                          alignItems: 'center', 
-                          justifyContent: 'center',
-                          borderRadius: 8,
-                          overflow: 'hidden',
-                          borderWidth: 1,
-                          borderColor: '#E2E8F0' 
-                        }}>
-                          <QrCode size={150} color="#0066CC" />
-                        </View>
+                  {/* QR code and action section */}
+                  <View style={styles.cardQrActionContainer}>
+                    {/* QR code */}
+                    <View style={styles.qrCodeWrapper}>
+                      <Text style={styles.qrCodeLabel}>Scan to Connect</Text>
+                      <View style={styles.qrCodeBox}>
+                        <QrCode size={110} color="#0066CC" />
                       </View>
                     </View>
                     
-                    <Text style={styles.qrCodeDescription}>
-                      Scan this code to view and connect with my professional profile
-                    </Text>
+                    {/* Share button */}
+                    <TouchableOpacity 
+                      style={styles.cardShareButton} 
+                      onPress={handleShare}
+                    >
+                      <LinearGradient
+                        colors={['#0052B4', '#0066CC', '#1E90FF']}
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          right: 0,
+                          top: 0,
+                          bottom: 0,
+                          borderRadius: 12,
+                        }}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                      />
+                      <Share2 size={16} color="#FFFFFF" />
+                      <Text style={styles.cardShareText}>Share</Text>
+                    </TouchableOpacity>
                   </View>
-                  
-                  {/* Action Button */}
-                  <TouchableOpacity style={styles.singleActionButton} onPress={handleShare}>
-                    <LinearGradient
-                      colors={['#0052B4', '#0066CC', '#1E90FF']}
-                      style={{
-                        position: 'absolute',
-                        left: 0,
-                        right: 0,
-                        top: 0,
-                        bottom: 0,
-                        borderRadius: 14,
-                      }}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                    />
-                    <Share2 size={20} color="#FFFFFF" />
-                    <Text style={styles.cardActionText}>Share Business Card</Text>
-                  </TouchableOpacity>
                 </View>
               </View>
             </RNAnimated.View>
@@ -966,7 +926,6 @@ const styles = StyleSheet.create({
     width: 36,
   },
   profileHeader: {
-    flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
@@ -974,9 +933,9 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F2F4F7',
   },
   avatarContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#0066CC',
@@ -984,12 +943,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 4,
-    marginRight: 16,
+    marginBottom: 12,
   },
   avatarImage: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     borderWidth: 2,
     borderColor: 'white',
   },
@@ -1001,16 +960,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#111827',
     fontFamily: 'Inter_600SemiBold',
-    marginBottom: 4,
+    marginBottom: 0,
+    marginTop: 8,
+    textAlign: 'center',
   },
   specialtyBadgeAlt: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#EBF5FF',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
     borderRadius: 12,
-    alignSelf: 'flex-start',
+    alignSelf: 'center',
   },
   specialtyTextAlt: {
     fontSize: 13,
@@ -1199,6 +1160,25 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontFamily: 'Inter_500Medium',
   },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  contentContainer: {
+    paddingBottom: 20,
+  },
+  errorText: {
+    fontSize: 15,
+    color: '#EF4444',
+    marginBottom: 12,
+    fontFamily: 'Inter_500Medium',
+    textAlign: 'center',
+  },
   modalBackdrop: {
     position: "absolute", 
     left: 0, 
@@ -1213,11 +1193,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   businessCard: {
-    width: '90%',
-    maxWidth: 400,
+    width: '80%',
+    maxWidth: 340,
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     overflow: 'hidden',
+    aspectRatio: 0.62, // Golden ratio approximation for a vertical card
     alignSelf: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
@@ -1227,107 +1208,81 @@ const styles = StyleSheet.create({
   },
   cardShadowWrapper: {
     width: '100%',
+    height: '100%',
     borderRadius: 20,
     overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+    display: 'flex',
+    flexDirection: 'column',
   },
   shimmerContainer: {
     overflow: 'hidden',
+    zIndex: 10,
   },
   shimmerGradient: {
     width: '200%',
     height: '100%',
   },
-  cardContainer: {
-    backgroundColor: '#FFFFFF',
+  cardGradient: {
+    width: '100%',
+    height: '50%', // Top half of the card is the gradient
+    alignItems: 'center',
+    position: 'relative',
   },
   cardHandleContainer: {
     width: '100%',
     alignItems: 'center',
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingTop: 10,
+    paddingBottom: 6,
   },
   cardHandle: {
-    width: 40,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#E2E8F0',
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  brandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  brandText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#334155',
-    fontFamily: 'Inter_600SemiBold',
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
   },
   closeCardButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F1F5F9',
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    zIndex: 10,
   },
-  cardBannerContainer: {
-    overflow: 'hidden',
-    borderRadius: 0,
-  },
-  cardBanner: {
-    width: '100%',
-    paddingTop: 32,
-    paddingBottom: 32,
-    alignItems: 'center',
+  cardContentContainer: {
+    flex: 1,
     justifyContent: 'center',
-  },
-  cardAvatarOuterRing: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 16,
   },
-  cardAvatarRing: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardAvatarWrapper: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    padding: 3,
+  cardAvatarContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    padding: 2,
+    marginBottom: 12,
+    shadowColor: 'rgba(0, 0, 0, 0.3)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
   },
   cardAvatarImage: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
+    width: '100%',
+    height: '100%',
+    borderRadius: 38,
     borderWidth: 2,
     borderColor: '#FFFFFF',
   },
   cardAvatarPlaceholder: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
+    width: '100%',
+    height: '100%',
+    borderRadius: 38,
     backgroundColor: 'rgba(0, 0, 0, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1335,13 +1290,12 @@ const styles = StyleSheet.create({
     borderColor: '#FFFFFF',
   },
   cardNameText: {
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: '600',
     color: '#FFFFFF',
     fontFamily: 'Inter_600SemiBold',
-    marginTop: 20,
-    marginBottom: 12,
     textAlign: 'center',
+    marginBottom: 6,
     textShadowColor: 'rgba(0, 0, 0, 0.1)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
@@ -1350,133 +1304,84 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
-    gap: 8,
-    alignSelf: 'center',
-    shadowColor: 'rgba(0, 0, 0, 0.1)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+    gap: 5,
   },
   cardSpecialtyText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '500',
     color: '#FFFFFF',
     fontFamily: 'Inter_500Medium',
   },
-  sectionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-    marginBottom: 16,
-    letterSpacing: 1,
-    fontFamily: 'Inter_600SemiBold',
+  cardBottomContainer: {
+    backgroundColor: '#FFFFFF',
+    height: '50%', // Bottom half of the card is white
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    justifyContent: 'space-between',
   },
-  cardInfoSection: {
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+  cardContactRow: {
+    flexDirection: 'column',
+    gap: 8,
   },
-  cardInfoRow: {
+  cardContactItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    gap: 8,
   },
-  cardInfoIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: '#EBF5FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-    shadowColor: '#0066CC',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  cardInfoText: {
-    fontSize: 16,
+  cardContactText: {
+    fontSize: 13,
     color: '#334155',
     fontWeight: '500',
     fontFamily: 'Inter_500Medium',
-  },
-  qrCodeSection: {
-    padding: 24,
-    alignItems: 'center',
-    paddingBottom: 20,
-  },
-  qrCodeTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    marginBottom: 20,
-  },
-  qrCodeTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#334155',
-    fontFamily: 'Inter_600SemiBold',
-    marginRight: 14,
-  },
-  qrCodeDivider: {
     flex: 1,
-    height: 1,
-    backgroundColor: '#E2E8F0',
   },
-  qrCodeBorder: {
-    padding: 12,
-    borderRadius: 16,
-    backgroundColor: '#F8FAFC',
+  cardQrActionContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginTop: 4,
+  },
+  qrCodeWrapper: {
+    alignItems: 'center',
+    width: '65%',
+  },
+  qrCodeLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+    fontFamily: 'Inter_600SemiBold',
+    marginBottom: 4,
+  },
+  qrCodeBox: {
+    padding: 5,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 5,
-    elevation: 3,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  qrCodeContainer: {
-    padding: 8,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-  },
-  qrCodeDescription: {
-    fontSize: 14,
-    color: '#64748B',
-    fontFamily: 'Inter_400Regular',
-    marginTop: 16,
-    textAlign: 'center',
-    lineHeight: 20,
-    paddingHorizontal: 8,
-  },
-  singleActionButton: {
+  cardShareButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0066CC',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    marginHorizontal: 24,
-    marginVertical: 20,
-    borderRadius: 14,
-    gap: 10,
-    shadowColor: '#0066CC',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 5,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    gap: 6,
+    alignSelf: 'flex-end',
+    width: '30%',
   },
-  cardActionText: {
-    fontSize: 16,
+  cardShareText: {
+    fontSize: 14,
     fontWeight: '600',
     color: '#FFFFFF',
     fontFamily: 'Inter_600SemiBold',
@@ -1538,7 +1443,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 8,
   },
-  statNumberCompact: {
+  statValueCompact: {
     fontSize: 18,
     fontWeight: '600',
     color: '#334155',
@@ -1550,30 +1455,47 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     marginTop: 2,
   },
-  statDividerCompact: {
-    height: 20,
-    width: 1,
-    backgroundColor: '#E2E8F0',
-    marginHorizontal: 8,
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    justifyContent: 'center',
+  cardCertificationBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
   },
-  scrollView: {
-    flex: 1,
+  cardCertificationText: {
+    fontSize: 13,
+    color: '#FFFFFF',
+    marginLeft: 6,
+    fontFamily: 'Inter_600SemiBold',
   },
-  contentContainer: {
-    paddingBottom: 20,
+  cardSpecialtyIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 2,
+    marginTop: 4,
   },
-  errorText: {
-    fontSize: 15,
-    color: '#EF4444',
-    marginBottom: 12,
-    fontFamily: 'Inter_500Medium',
-    textAlign: 'center',
+  cardSpecialtyDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#0066CC',
+    marginRight: 8,
+  },
+  cardSpecialtyIndicatorText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0066CC',
+    fontFamily: 'Inter_600SemiBold',
+  },
+  profileTopSection: {
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  specialtyBadgeContainer: {
+    alignItems: 'center',
+    marginTop: 0,
   },
 });
 

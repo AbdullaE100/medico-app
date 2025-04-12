@@ -368,45 +368,6 @@ export default function HomeScreen() {
   const [repostModalVisible, setRepostModalVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'following'>('all');
   
-  // New state variables for real-time updates
-  const [hasNewPosts, setHasNewPosts] = useState(false);
-  const [newPostsCount, setNewPostsCount] = useState(0);
-  const [lastCheckedTimestamp, setLastCheckedTimestamp] = useState<Date | null>(null);
-  const [isCheckingNewPosts, setIsCheckingNewPosts] = useState(false);
-  const newPostsBannerHeight = useRef(new Animated.Value(0)).current;
-  const refreshIconRotation = useRef(new Animated.Value(0)).current;
-  
-  // Start the icon rotation animation
-  useEffect(() => {
-    if (hasNewPosts) {
-      // Create a repeating rotation animation
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(refreshIconRotation, {
-            toValue: 1,
-            duration: 2000,
-            useNativeDriver: true,
-            easing: Easing.linear
-          }),
-          Animated.timing(refreshIconRotation, {
-            toValue: 0,
-            duration: 0,
-            useNativeDriver: true
-          })
-        ])
-      ).start();
-    } else {
-      // Reset rotation when there are no new posts
-      refreshIconRotation.setValue(0);
-    }
-  }, [hasNewPosts]);
-  
-  // Create the rotation interpolation
-  const spin = refreshIconRotation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg']
-  });
-  
   // Load posts on component mount or when tab changes
   useEffect(() => {
     if (activeTab === 'all') {
@@ -415,119 +376,7 @@ export default function HomeScreen() {
       // Load posts from followed connections
       fetchPosts({ following: true });
     }
-    
-    // Reset new posts state when tab changes
-    setHasNewPosts(false);
-    setNewPostsCount(0);
   }, [activeTab]);
-  
-  // Set the last checked timestamp whenever posts are loaded
-  useEffect(() => {
-    if (posts.length > 0 && !isLoading) {
-      setLastCheckedTimestamp(new Date());
-    }
-  }, [posts, isLoading]);
-  
-  // Polling mechanism to check for new posts
-  useEffect(() => {
-    let pollingInterval: NodeJS.Timeout;
-    
-    const checkForNewPosts = async () => {
-      // Skip if already checking, loading initial posts, or no posts loaded yet
-      if (isCheckingNewPosts || isLoading || posts.length === 0 || !lastCheckedTimestamp) {
-        return;
-      }
-      
-      try {
-        setIsCheckingNewPosts(true);
-        
-        // Get the most recent post's timestamp
-        const mostRecentPostDate = posts[0]?.created_at 
-          ? new Date(posts[0].created_at) 
-          : new Date(0);
-        
-        // Fetch only posts newer than the most recent one we have
-        const { data: newPosts } = await supabase
-          .from('posts')
-          .select('id, created_at')
-          .gt('created_at', mostRecentPostDate.toISOString())
-          .order('created_at', { ascending: false });
-        
-        if (newPosts && newPosts.length > 0) {
-          setHasNewPosts(true);
-          setNewPostsCount(newPosts.length);
-          
-          // Animate the banner in
-          Animated.timing(newPostsBannerHeight, {
-            toValue: 48,
-            duration: 300,
-            useNativeDriver: false,
-            easing: Easing.out(Easing.ease)
-          }).start();
-          
-          // Provide haptic feedback
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        }
-      } catch (error) {
-        console.error('Error checking for new posts:', error);
-      } finally {
-        setIsCheckingNewPosts(false);
-      }
-    };
-    
-    // Start polling if we have posts and a last checked timestamp
-    if (posts.length > 0 && lastCheckedTimestamp) {
-      pollingInterval = setInterval(checkForNewPosts, 30000); // Check every 30 seconds
-      
-      // Initial check after a short delay
-      const initialCheckTimeout = setTimeout(() => {
-        checkForNewPosts();
-      }, 5000);
-      
-      return () => {
-        clearInterval(pollingInterval);
-        clearTimeout(initialCheckTimeout);
-      };
-    }
-    
-    return () => {
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-      }
-    };
-  }, [posts, lastCheckedTimestamp, isLoading, isCheckingNewPosts, activeTab]);
-  
-  const loadNewPosts = async () => {
-    // First animate the banner out
-    Animated.timing(newPostsBannerHeight, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: false,
-      easing: Easing.in(Easing.ease)
-    }).start();
-    
-    // Then refresh the posts
-    setRefreshing(true);
-    
-    try {
-      if (activeTab === 'all') {
-        await loadPosts();
-      } else {
-        await refreshPosts({ following: true });
-      }
-      
-      // Reset new posts state
-      setHasNewPosts(false);
-      setNewPostsCount(0);
-      
-      // Provide haptic feedback
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch (error) {
-      console.error('Error loading new posts:', error);
-    } finally {
-      setRefreshing(false);
-    }
-  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -536,9 +385,6 @@ export default function HomeScreen() {
     } else {
       await refreshPosts({ following: true });
     }
-    // Reset new posts state when manually refreshing
-    setHasNewPosts(false);
-    setNewPostsCount(0);
     setRefreshing(false);
   };
 
@@ -693,25 +539,6 @@ export default function HomeScreen() {
         </View>
       ) : (
         <View style={styles.feedWrapper}>
-          {/* New Posts Banner */}
-          <Animated.View style={[styles.newPostsBanner, { height: newPostsBannerHeight }]}>
-            <TouchableOpacity 
-              style={styles.newPostsBannerContent} 
-              onPress={loadNewPosts}
-              activeOpacity={0.8}
-            >
-              <View style={styles.newPostsTextContainer}>
-                <Animated.View style={{ transform: [{ rotate: spin }] }}>
-                  <RefreshCw size={16} color="#FFFFFF" style={styles.refreshIcon} />
-                </Animated.View>
-                <Text style={styles.newPostsText}>
-                  {newPostsCount} new {newPostsCount === 1 ? 'post' : 'posts'}
-                </Text>
-              </View>
-              <Text style={styles.refreshText}>Tap to view</Text>
-            </TouchableOpacity>
-          </Animated.View>
-
           <FlatList
             data={posts}
             renderItem={renderPostItem}
@@ -1377,46 +1204,5 @@ const styles = StyleSheet.create({
   },
   feedWrapper: {
     flex: 1,
-  },
-  newPostsBanner: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#0066CC',
-    zIndex: 1000,
-    overflow: 'hidden',
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  newPostsBannerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-    paddingHorizontal: 16,
-  },
-  newPostsTextContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  refreshIcon: {
-    marginRight: 8,
-  },
-  newPostsText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  refreshText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#FFFFFF',
-    opacity: 0.9,
   },
 });
