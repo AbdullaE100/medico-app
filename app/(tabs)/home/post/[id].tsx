@@ -25,6 +25,9 @@ import { useFeedStore, Comment } from '@/stores/useFeedStore';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { supabase } from '@/lib/supabase';
+import { PollExtractor } from '@/components/PollExtractor';
+import { FormattedPostContent } from '@/components/FormattedPostContent';
+import { Avatar } from '@/components/Avatar';
 
 // Define a more complete Post interface for this component
 interface PostDetail {
@@ -438,13 +441,12 @@ export default function PostDetail() {
             >
               <View style={styles.postCard}>
                 <View style={styles.postHeader}>
-                  <Image 
-                    source={{ 
-                      uri: post.is_anonymous
-                        ? 'https://placehold.co/100x100/555555/FFFFFF?text=MD'
-                        : post.profile?.avatar_url || 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400'
-                    }} 
-                    style={styles.avatar} 
+                  <Avatar 
+                    size={50}
+                    source={post.is_anonymous ? null : post.profile?.avatar_url}
+                    initials={post.profile?.full_name?.charAt(0) || 'M'}
+                    isAnonymous={post.is_anonymous}
+                    backgroundColor="#0066CC"
                   />
                   <View style={styles.authorInfo}>
                     <View style={styles.nameRow}>
@@ -466,14 +468,22 @@ export default function PostDetail() {
                   </View>
                 </View>
 
-                <Text style={styles.postContent}>{post.content}</Text>
+                <FormattedPostContent style={styles.postContent} content={post.content} />
 
+                {/* Poll section */}
+                {post.id && post.content && (
+                  <PollExtractor postId={post.id} content={post.content} />
+                )}
+
+                {/* Post Images */}
                 {post.media_url && post.media_url.length > 0 && (
-                  <Image 
-                    source={{ uri: post.media_url[0] }} 
-                    style={styles.postImage}
-                    resizeMode="cover"
-                  />
+                  <View style={styles.mediaContainer}>
+                    <Image 
+                      source={{ uri: post.media_url[0] }} 
+                      style={styles.postImage}
+                      resizeMode="cover"
+                    />
+                  </View>
                 )}
 
                 {post.hashtags && post.hashtags.length > 0 && (
@@ -649,16 +659,12 @@ const styles = StyleSheet.create({
   },
   postHeader: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     marginBottom: 12,
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    marginRight: 12,
   },
   authorInfo: {
     flex: 1,
+    marginLeft: 12,
   },
   nameRow: {
     flexDirection: 'row',
@@ -992,5 +998,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 4,
     alignSelf: 'flex-start',
+  },
+  mediaContainer: {
+    marginBottom: 12,
   },
 }); 

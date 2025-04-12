@@ -14,7 +14,8 @@ import {
   StatusBar,
   SafeAreaView,
   ActivityIndicator,
-  Dimensions
+  Dimensions,
+  Modal
 } from 'react-native';
 import { 
   ArrowLeft, 
@@ -29,7 +30,12 @@ import {
   Users, 
   Globe, 
   Plus,
-  UserX
+  UserX,
+  BarChart,
+  CheckCircle,
+  Image as ImageSquare,
+  Trash2,
+  Minus
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useFeedStore } from '@/stores/useFeedStore';
@@ -45,6 +51,8 @@ import Animated, {
 import { supabase } from '@/lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import * as Location from 'expo-location';
+import { getPollStore } from '@/stores/usePollStore';
 
 // Constants
 const CHAR_LIMIT = 500;
@@ -68,6 +76,17 @@ export default function CreatePostScreen() {
   const [mentionData, setMentionData] = useState<any[]>([]);
   const [showMentionPanel, setShowMentionPanel] = useState(false);
   const [cursorPosition, setCursorPosition] = useState(0);
+  
+  // New state for enhanced functionality
+  const [showPollModal, setShowPollModal] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState(['', '']);
+  const [pollDuration, setPollDuration] = useState(7);
+  const [locationModalVisible, setLocationModalVisible] = useState(false);
+  const [location, setLocation] = useState<string | null>(null);
+  const [emojiPickerVisible, setEmojiPickerVisible] = useState(false);
+  const [activeEmoji, setActiveEmoji] = useState('');
+  const [recentEmojis, setRecentEmojis] = useState(['😊', '👍', '❤️', '🙏', '🩺', '🏥', '💉']);
   
   // Animated values
   const fadeAnim = useSharedValue(0);
@@ -324,7 +343,7 @@ export default function CreatePostScreen() {
       console.log('Is anonymous:', isAnonymous);
       
       // Create post with the anonymous flag if selected
-      await createPost({
+      const post = await createPost({
         content,
         media_url: uploadedImageUrls,
         hashtags,
@@ -334,12 +353,47 @@ export default function CreatePostScreen() {
       
       console.log('Post created successfully');
       
+      // If we have poll data, create the poll and associate it with the post
+      if (pollData && post && post.id) {
+        console.log('Creating poll for post:', post.id);
+        console.log('Poll data:', JSON.stringify(pollData));
+        
+        const pollStore = getPollStore();
+        try {
+          // Ensure we have a complete poll data structure
+          const completePollData = {
+            ...pollData,
+            post_id: post.id,
+            // Make sure all required fields are present
+            created_at: pollData.created_at || new Date().toISOString(),
+            expires_at: pollData.expires_at || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            totalVotes: pollData.totalVotes || 0,
+            voters: pollData.voters || [],
+            isActive: true
+          };
+          
+          // Create the poll
+          const poll = await pollStore.createPoll(completePollData);
+          
+          if (poll) {
+            console.log('Poll created successfully with ID:', poll.id);
+          } else {
+            console.error('Failed to create poll - no poll returned from createPoll');
+            Alert.alert('Poll Creation Issue', 'Your post was created, but there was an issue with the poll. Please try again or contact support.');
+          }
+        } catch (pollError) {
+          console.error('Error creating poll:', pollError);
+          Alert.alert('Poll Creation Error', 'Your post was created, but there was an error with the poll. Please try again or contact support.');
+        }
+      }
+      
       // Reset form fields
       setContent('');
       setImages([]);
       setHashtags([]);
       setIsPublic(true);
       setIsAnonymous(false);
+      setPollData(null);
       
       // Success - navigate back home
       console.log('Navigating to home screen');
@@ -384,23 +438,514 @@ export default function CreatePostScreen() {
     }
   };
   
+  // New methods for enhanced functionality
+  
+  // Poll related functions
+  const addPollOption = () => {
+    if (pollOptions.length < 4) {
+      setPollOptions([...pollOptions, '']);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
+  // Add a function to check if polls table exists
+  const checkPollsTableExists = async () => {
+    try {
+      // Try to query the table
+      const { error } = await supabase
+        .from('polls')
+        .select('id')
+        .limit(1);
+        
+      if (error && error.code === '42P01') {
+        // Table doesn't exist
+        Alert.alert(
+          'Poll Feature Not Set Up',
+          'The polls database table has not been created yet. Please check the sql-scripts directory for setup instructions.',
+          [{ text: 'OK' }]
+        );
+        return false;
+      }
+      
+      return true;
+    } catch (err) {
+      console.error('Error checking poll table:', err);
+      return false;
+    }
+  };
+
+  // Show poll creation modal
+  const handleShowPollModal = async () => {
+    // First check if polls table exists
+    const tableExists = await checkPollsTableExists();
+    if (!tableExists) {
+      return;
+    }
+    
+    // If table exists, show the modal
+    setShowPollModal(true);
+  };
+
+  const removePollOption = (index: number) => {
+    if (pollOptions.length > 2) {
+      const newOptions = [...pollOptions];
+      newOptions.splice(index, 1);
+      setPollOptions(newOptions);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
+  const updatePollOption = (text: string, index: number) => {
+    const newOptions = [...pollOptions];
+    newOptions[index] = text;
+    setPollOptions(newOptions);
+  };
+
+  const confirmPoll = () => {
+    // Validate poll data
+    if (!pollQuestion.trim()) {
+      Alert.alert('Please enter a poll question');
+      return;
+    }
+
+    // Filter out empty options and ensure we have at least 2
+    const validOptions = pollOptions.filter(option => option.trim() !== '');
+    if (validOptions.length < 2) {
+      Alert.alert('Please add at least 2 poll options');
+      return;
+    }
+
+    // Create poll data structure with voting capabilities
+    const newPollData = {
+      question: pollQuestion.trim(),
+      options: validOptions.map(option => ({
+        text: option.trim(),
+        votes: 0,  // Initialize votes count
+        voters: [], // Will store user IDs who voted for this option
+      })),
+      duration: pollDuration,
+      totalVotes: 0,
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + pollDuration * 24 * 60 * 60 * 1000).toISOString(),
+      voters: [], // Will store all voters to prevent duplicate voting
+      isActive: true,
+      post_id: '' // Will be set when post is created
+    };
+
+    // Update content to better indicate poll presence
+    setContent(prev => {
+      // Remove any existing poll marker
+      const contentWithoutPoll = prev.replace(/\n*📊\s*POLL:.*\[POLL\]\n*/g, '').trim();
+      
+      // Add poll data indicator with the question for clarity
+      const pollIndicator = `\n\n📊 POLL: ${pollQuestion.trim()} [POLL]`;
+      
+      return contentWithoutPoll + pollIndicator;
+    });
+
+    // Save poll data to post
+    setPollData(newPollData);
+    setShowPollModal(false);
+    
+    // Give haptic feedback
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    
+    // Show confirmation to the user
+    Alert.alert('Poll Added', 'Your poll has been added to the post. Submit your post to publish it.');
+    
+    console.log('Poll data prepared:', JSON.stringify(newPollData));
+  };
+
+  // Location functions
+  const getLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant location permission to use this feature.');
+        return;
+      }
+
+      setLocationModalVisible(true);
+      
+      // Get current location
+      const location = await Location.getCurrentPositionAsync({});
+      const { latitude, longitude } = location.coords;
+
+      // Get readable address
+      const addresses = await Location.reverseGeocodeAsync({ latitude, longitude });
+      if (addresses && addresses.length > 0) {
+        const address = addresses[0];
+        const locationString = [
+          address.city,
+          address.region,
+          address.country
+        ].filter(Boolean).join(', ');
+        
+        setLocation(locationString);
+      }
+    } catch (error) {
+      console.error('Error getting location:', error);
+      Alert.alert('Error', 'Unable to fetch your location. Please try again.');
+    }
+  };
+
+  const addLocationToPost = () => {
+    if (location) {
+      setContent(prevContent => {
+        if (prevContent.trim()) {
+          return `${prevContent}\n\n📍 ${location}`;
+        }
+        return `📍 ${location}`;
+      });
+      setLocationModalVisible(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  };
+
+  // Emoji picker function
+  const addEmojiToContent = (emoji: string) => {
+    // Update recent emojis
+    if (!recentEmojis.includes(emoji)) {
+      setRecentEmojis(prev => [emoji, ...prev.slice(0, 6)]);
+    }
+    
+    // Add emoji at cursor position
+    const beforeCursor = content.substring(0, cursorPosition);
+    const afterCursor = content.substring(cursorPosition);
+    const newContent = `${beforeCursor}${emoji}${afterCursor}`;
+    
+    setContent(newContent);
+    // Set cursor position after emoji
+    setCursorPosition(cursorPosition + emoji.length);
+    
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setEmojiPickerVisible(false);
+    
+    // Focus back on text input
+    setTimeout(() => {
+      textInputRef.current?.focus();
+    }, 100);
+  };
+
+  // Enhanced image picker with multiple selection
+  const pickMultipleImages = async () => {
+    if (images.length >= 4) {
+      Alert.alert('Limit Reached', 'You can add a maximum of 4 images per post.');
+      return;
+    }
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        selectionLimit: 4 - images.length,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets.length > 0) {
+        // Add haptic feedback
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        
+        // Add selected images
+        const newImages = [...images];
+        result.assets.forEach(asset => {
+          if (newImages.length < 4) {
+            newImages.push(asset.uri);
+          }
+        });
+        
+        setImages(newImages);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to select images. Please try again.');
+    }
+  };
+
+  // Enhanced camera functionality
+  const takePicture = async () => {
+    if (images.length >= 4) {
+      Alert.alert('Limit Reached', 'You can add a maximum of 4 images per post.');
+      return;
+    }
+
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Camera permission is required to take pictures.');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets.length > 0) {
+        // Add haptic feedback
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        
+        setImages([...images, result.assets[0].uri]);
+      }
+    } catch (error) {
+      console.error('Error taking picture:', error);
+      Alert.alert('Error', 'Failed to take picture. Please try again.');
+    }
+  };
+
+  // Render poll modal
+  const renderPollModal = () => (
+    <Modal
+      visible={showPollModal}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={() => setShowPollModal(false)}
+    >
+      <TouchableOpacity 
+        style={styles.modalOverlay} 
+        activeOpacity={1} 
+        onPress={() => setShowPollModal(false)}
+      >
+        <View style={styles.pollModalContainer}>
+          <View style={styles.pollModalHeader}>
+            <Text style={styles.pollModalTitle}>Create Poll</Text>
+            <TouchableOpacity onPress={() => setShowPollModal(false)}>
+              <X size={24} color="#000" />
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView style={styles.pollModalContent}>
+            <Text style={styles.pollModalLabel}>Question</Text>
+            <TextInput
+              style={styles.pollQuestionInput}
+              placeholder="Ask a question..."
+              value={pollQuestion}
+              onChangeText={setPollQuestion}
+              multiline
+              maxLength={150}
+            />
+            
+            <Text style={styles.pollModalLabel}>Options (2-4)</Text>
+            {pollOptions.map((option, index) => (
+              <View key={index} style={styles.pollOptionRow}>
+                <TextInput
+                  style={styles.pollOptionInput}
+                  placeholder={`Option ${index + 1}`}
+                  value={option}
+                  onChangeText={(text) => updatePollOption(text, index)}
+                  maxLength={50}
+                />
+                {index > 1 && (
+                  <TouchableOpacity 
+                    style={styles.pollOptionRemoveButton}
+                    onPress={() => removePollOption(index)}
+                  >
+                    <Minus size={20} color="#FF3B30" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))}
+            
+            {pollOptions.length < 4 && (
+              <TouchableOpacity 
+                style={styles.addPollOptionButton}
+                onPress={addPollOption}
+              >
+                <Plus size={20} color="#0066CC" />
+                <Text style={styles.addPollOptionText}>Add Option</Text>
+              </TouchableOpacity>
+            )}
+            
+            <Text style={styles.pollModalLabel}>Poll Duration</Text>
+            <View style={styles.pollDurationContainer}>
+              {[1, 3, 7, 14].map((days) => (
+                <TouchableOpacity
+                  key={days}
+                  style={[
+                    styles.pollDurationOption,
+                    pollDuration === days && styles.pollDurationOptionSelected
+                  ]}
+                  onPress={() => setPollDuration(days)}
+                >
+                  <Text 
+                    style={[
+                      styles.pollDurationText,
+                      pollDuration === days && styles.pollDurationTextSelected
+                    ]}
+                  >
+                    {days} {days === 1 ? 'day' : 'days'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            
+            <Text style={styles.pollHelpText}>
+              After posting, users can vote on your poll.
+              Results will be displayed as percentages.
+            </Text>
+            
+            <TouchableOpacity
+              style={[
+                styles.confirmPollButton,
+                (!pollQuestion.trim() || pollOptions.filter(o => o.trim()).length < 2) && 
+                  styles.confirmPollButtonDisabled
+              ]}
+              onPress={confirmPoll}
+              disabled={!pollQuestion.trim() || pollOptions.filter(o => o.trim()).length < 2}
+            >
+              <Text style={styles.confirmPollButtonText}>Add Poll to Post</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+
+  // Render location modal
+  const renderLocationModal = () => (
+    <Modal
+      visible={locationModalVisible}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={() => setLocationModalVisible(false)}
+    >
+      <TouchableOpacity 
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={() => setLocationModalVisible(false)}
+      >
+        <View style={styles.locationModalContainer}>
+          <View style={styles.locationModalHeader}>
+            <Text style={styles.locationModalTitle}>Add Location</Text>
+            <TouchableOpacity onPress={() => setLocationModalVisible(false)}>
+              <X size={22} color="#333" />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.locationModalContent}>
+            {location ? (
+              <>
+                <View style={styles.locationResult}>
+                  <MapPin size={24} color="#0066CC" />
+                  <Text style={styles.locationText}>{location}</Text>
+                </View>
+                
+                <TouchableOpacity 
+                  style={styles.addLocationButton}
+                  onPress={addLocationToPost}
+                >
+                  <Text style={styles.addLocationButtonText}>Add to Post</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <View style={styles.locationLoading}>
+                <ActivityIndicator size="large" color="#0066CC" />
+                <Text style={styles.locationLoadingText}>Finding your location...</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+
+  // Render emoji picker
+  const renderEmojiPicker = () => (
+    <Modal
+      visible={emojiPickerVisible}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={() => setEmojiPickerVisible(false)}
+    >
+      <TouchableOpacity 
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={() => setEmojiPickerVisible(false)}
+      >
+        <View style={styles.emojiPickerContainer}>
+          <View style={styles.emojiPickerHeader}>
+            <Text style={styles.emojiPickerTitle}>Select Emoji</Text>
+            <TouchableOpacity onPress={() => setEmojiPickerVisible(false)}>
+              <X size={22} color="#333" />
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView style={styles.emojiPickerContent}>
+            <Text style={styles.emojiCategoryTitle}>Recent</Text>
+            <View style={styles.emojiGrid}>
+              {recentEmojis.map((emoji, index) => (
+                <TouchableOpacity
+                  key={`recent-${index}`}
+                  style={styles.emojiItem}
+                  onPress={() => addEmojiToContent(emoji)}
+                >
+                  <Text style={styles.emoji}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            
+            <Text style={styles.emojiCategoryTitle}>Medical</Text>
+            <View style={styles.emojiGrid}>
+              {['🩺', '💉', '🏥', '🧬', '🦠', '🧪', '🧫', '🧠', '❤️', '🫀', '🫁', '🦴', '👨‍⚕️', '👩‍⚕️', '🩸', '🩹'].map((emoji, index) => (
+                <TouchableOpacity
+                  key={`medical-${index}`}
+                  style={styles.emojiItem}
+                  onPress={() => addEmojiToContent(emoji)}
+                >
+                  <Text style={styles.emoji}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            
+            <Text style={styles.emojiCategoryTitle}>Common</Text>
+            <View style={styles.emojiGrid}>
+              {['😊', '👍', '👋', '🙏', '🎉', '🔥', '💯', '⭐', '😂', '❤️', '👏', '🤔', '😍', '🙌', '👀', '✅'].map((emoji, index) => (
+                <TouchableOpacity
+                  key={`common-${index}`}
+                  style={styles.emojiItem}
+                  onPress={() => addEmojiToContent(emoji)}
+                >
+                  <Text style={styles.emoji}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+
+  // Add this state variable for poll data
+  const [pollData, setPollData] = useState<any>(null);
+  
+  // Add this function to reset form
+  const resetForm = () => {
+    setContent('');
+    setImages([]);
+    setHashtags([]);
+    setHashtagInput('');
+    setVisibility('public');
+    setLocation(null);
+    setPollQuestion('');
+    setPollOptions(['', '']);
+    setPollDuration(7);
+    setPollData(null);
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
       <LinearGradient
-        colors={['#f9f9f9', '#ffffff']}
+        colors={['#ffffff', '#f5f9ff']}
         style={styles.gradientBackground}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.container}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
         >
           <Animated.View style={[styles.header, headerAnimatedStyle]}>
-            <TouchableOpacity 
-              style={styles.headerButton} 
-              onPress={handleCancel}
-            >
+            <TouchableOpacity style={styles.headerButton} onPress={handleCancel}>
               <ArrowLeft size={22} color="#333" />
             </TouchableOpacity>
             
@@ -409,10 +954,10 @@ export default function CreatePostScreen() {
             <TouchableOpacity
               style={[
                 styles.postButton,
-                { opacity: validatePost() ? 1 : 0.7 }
+                (!content.trim() && images.length === 0) && { opacity: 0.5 }
               ]}
               onPress={handlePostSubmit}
-              disabled={isPosting || !validatePost()}
+              disabled={(!content.trim() && images.length === 0) || isPosting}
             >
               {isPosting ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
@@ -421,12 +966,11 @@ export default function CreatePostScreen() {
               )}
             </TouchableOpacity>
           </Animated.View>
-        
+          
           <ScrollView
             style={styles.scrollView}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollViewContent}
+            keyboardShouldPersistTaps="handled"
           >
             <Animated.View style={[styles.contentContainer, contentAnimatedStyle]}>
               {/* Visibility Options */}
@@ -618,7 +1162,8 @@ export default function CreatePostScreen() {
           </ScrollView>
           
           <Animated.View style={[styles.toolbar, toolbarAnimatedStyle]}>
-            <TouchableOpacity style={styles.toolbarButton} onPress={pickImage}>
+            {/* Gallery Icon */}
+            <TouchableOpacity style={styles.toolbarButton} onPress={pickMultipleImages}>
               <LinearGradient
                 colors={['#f2f8ff', '#e6f0ff']}
                 style={styles.toolbarButtonGradient}
@@ -627,7 +1172,8 @@ export default function CreatePostScreen() {
               </LinearGradient>
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.toolbarButton}>
+            {/* Camera Icon */}
+            <TouchableOpacity style={styles.toolbarButton} onPress={takePicture}>
               <LinearGradient
                 colors={['#f2f8ff', '#e6f0ff']}
                 style={styles.toolbarButtonGradient}
@@ -636,7 +1182,8 @@ export default function CreatePostScreen() {
               </LinearGradient>
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.toolbarButton}>
+            {/* Emoji Icon */}
+            <TouchableOpacity style={styles.toolbarButton} onPress={() => setEmojiPickerVisible(true)}>
               <LinearGradient
                 colors={['#f2f8ff', '#e6f0ff']}
                 style={styles.toolbarButtonGradient}
@@ -645,7 +1192,8 @@ export default function CreatePostScreen() {
               </LinearGradient>
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.toolbarButton}>
+            {/* Location Icon */}
+            <TouchableOpacity style={styles.toolbarButton} onPress={getLocation}>
               <LinearGradient
                 colors={['#f2f8ff', '#e6f0ff']}
                 style={styles.toolbarButtonGradient}
@@ -654,17 +1202,42 @@ export default function CreatePostScreen() {
               </LinearGradient>
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.toolbarButton}>
+            {/* Tag Icon */}
+            <TouchableOpacity 
+              style={styles.toolbarButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                textInputRef.current?.focus();
+                const newContent = content + ' @';
+                setContent(newContent);
+                setCursorPosition(newContent.length);
+              }}
+            >
               <LinearGradient
                 colors={['#f2f8ff', '#e6f0ff']}
                 style={styles.toolbarButtonGradient}
               >
-                <Tag size={20} color="#0066CC" />
+                <AtSign size={20} color="#0066CC" />
+              </LinearGradient>
+            </TouchableOpacity>
+            
+            {/* Poll Icon - New */}
+            <TouchableOpacity style={styles.toolbarButton} onPress={handleShowPollModal}>
+              <LinearGradient
+                colors={['#f2f8ff', '#e6f0ff']}
+                style={styles.toolbarButtonGradient}
+              >
+                <BarChart size={20} color="#0066CC" />
               </LinearGradient>
             </TouchableOpacity>
           </Animated.View>
         </KeyboardAvoidingView>
       </LinearGradient>
+      
+      {/* Render all modals */}
+      {renderPollModal()}
+      {renderLocationModal()}
+      {renderEmojiPicker()}
     </SafeAreaView>
   );
 }
@@ -1004,5 +1577,238 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter_500Medium',
     color: '#333',
+  },
+  // New styles for poll modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  pollModalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+  },
+  pollModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+  },
+  pollModalTitle: {
+    fontSize: 18,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#333',
+  },
+  pollModalContent: {
+    padding: 16,
+  },
+  pollModalLabel: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#333',
+    marginBottom: 8,
+  },
+  pollQuestionInput: {
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    fontFamily: 'Inter_400Regular',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+    marginBottom: 16,
+  },
+  pollOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  pollOptionInput: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    fontFamily: 'Inter_400Regular',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+  },
+  pollOptionRemoveButton: {
+    padding: 8,
+    marginLeft: 8,
+  },
+  addPollOptionButton: {
+    backgroundColor: '#0066CC',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  addPollOptionText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+    marginLeft: 8,
+  },
+  pollDurationContainer: {
+    flexDirection: 'row',
+    marginBottom: 20,
+  },
+  pollDurationOption: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    marginHorizontal: 4,
+  },
+  pollDurationOptionSelected: {
+    backgroundColor: 'rgba(0, 102, 204, 0.1)',
+  },
+  pollDurationText: {
+    fontSize: 14,
+    fontFamily: 'Inter_500Medium',
+    color: '#666',
+  },
+  pollDurationTextSelected: {
+    color: '#0066CC',
+    fontFamily: 'Inter_600SemiBold',
+  },
+  pollHelpText: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    color: '#666',
+    marginBottom: 20,
+  },
+  confirmPollButton: {
+    backgroundColor: '#0066CC',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 30,
+  },
+  confirmPollButtonDisabled: {
+    backgroundColor: 'rgba(0, 102, 204, 0.5)',
+  },
+  confirmPollButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  
+  // Location modal styles
+  locationModalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '50%',
+  },
+  locationModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+  },
+  locationModalTitle: {
+    fontSize: 18,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#333',
+  },
+  locationModalContent: {
+    padding: 20,
+  },
+  locationLoading: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 30,
+  },
+  locationLoadingText: {
+    fontSize: 16,
+    fontFamily: 'Inter_400Regular',
+    color: '#666',
+    marginTop: 16,
+  },
+  locationResult: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  locationText: {
+    fontSize: 16,
+    fontFamily: 'Inter_500Medium',
+    color: '#333',
+    marginLeft: 12,
+    flex: 1,
+  },
+  addLocationButton: {
+    backgroundColor: '#0066CC',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  addLocationButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  
+  // Emoji picker styles
+  emojiPickerContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '60%',
+  },
+  emojiPickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+  },
+  emojiPickerTitle: {
+    fontSize: 18,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#333',
+  },
+  emojiPickerContent: {
+    padding: 16,
+  },
+  emojiCategoryTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#333',
+    marginVertical: 10,
+  },
+  emojiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+  },
+  emojiItem: {
+    width: SCREEN_WIDTH / 8,
+    height: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emoji: {
+    fontSize: 28,
   },
 }); 

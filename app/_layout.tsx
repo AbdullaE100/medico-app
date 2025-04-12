@@ -5,10 +5,11 @@ import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { SplashScreen } from 'expo-router';
 import { useAuthStore } from '@/stores/useAuthStore';
-import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Linking from 'expo-linking';
 import { handleAuthRedirect } from '@/lib/supabase';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
 
 // Create our linking configuration for deep links
 const linking = {
@@ -122,6 +123,10 @@ function AuthRedirector() {
     }
   }, [isAuthenticated, isLoading, pathname]);
   
+  if (isLoading) {
+    return <LoadingOverlay message="Verifying account..." />;
+  }
+  
   return null;
 }
 
@@ -163,7 +168,7 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0066CC" />
+        <LoadingOverlay message="Loading Medico..." />
       </View>
     );
   }

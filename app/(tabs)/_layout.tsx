@@ -1,17 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { Tabs, usePathname } from 'expo-router';
 import { Chrome as Home, Users, MessagesSquare, Bell, User, Plus, Newspaper } from 'lucide-react-native';
-import { Platform, View, StyleSheet, ActivityIndicator, SafeAreaView, StatusBar, Text } from 'react-native';
+import { Platform, View, StyleSheet, SafeAreaView, StatusBar, Text } from 'react-native';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useFeedStore } from '@/stores/useFeedStore';
 import { useNetworkStore } from '@/stores/useNetworkStore';
 import { useDiscussionsStore } from '@/stores/useDiscussionsStore';
 import { useChatStore } from '@/stores/useChatStore';
 import { useNotificationsStore } from '@/stores/useNotificationsStore';
+import { usePollStore, getPollStore } from '@/stores/usePollStore';
 import ProfileIconHeader from '@/components/ProfileIconHeader';
 import { NotificationBell } from '@/components/NotificationBell';
 import NotificationManager from '@/components/NotificationManager';
 import { LinearGradient } from 'expo-linear-gradient';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
 
 export default function TabLayout() {
   const { isAuthenticated, checkAuth, isLoading } = useAuthStore();
@@ -60,6 +62,14 @@ export default function TabLayout() {
         // First, check authentication status
         await checkAuth();
         
+        // Initialize the poll store
+        const pollStore = getPollStore();
+        pollStore.setStartupComplete();
+        console.log("Poll store initialized and marked as startup complete");
+        
+        // Check if polls table exists early
+        pollStore.checkTableExists().catch(e => console.error("Error checking polls table:", e));
+        
         if (isAuthenticated) {
           console.log("User is authenticated, fetching initial data...");
           
@@ -83,7 +93,10 @@ export default function TabLayout() {
         console.error("Error during app initialization:", error);
       } finally {
         // Mark initialization as complete regardless of success/failure
-        setIsInitialized(true);
+        // Small timeout to ensure the UI is ready to render
+        setTimeout(() => {
+          setIsInitialized(true);
+        }, 300);
       }
     };
 
@@ -103,7 +116,7 @@ export default function TabLayout() {
   if (isLoading || !isInitialized) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
-        <ActivityIndicator size="large" color="#0066CC" />
+        <LoadingOverlay message="Loading your medical network..." />
       </View>
     );
   }
@@ -244,10 +257,11 @@ const styles = StyleSheet.create({
   },
   safeAreaHome: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 8 : 4,
-    right: 16,
+    top: Platform.OS === 'ios' ? 45 : 10,
+    right: 10,
     left: undefined,
     width: 'auto',
+    zIndex: 1500,
   },
   headerIconsContainer: {
     flexDirection: 'row',
@@ -259,8 +273,10 @@ const styles = StyleSheet.create({
     paddingLeft: 16,
   },
   headerIconsContainerHome: {
-    paddingTop: 6,
+    paddingTop: 0,
     paddingRight: 0,
+    paddingBottom: 0,
+    gap: 8,
   },
   createTabIcon: {
     width: 36,
