@@ -17,7 +17,11 @@ export default {
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'com.medical.network',
-    associatedDomains: ["applinks:auth.medico-app.com", "applinks:cslxbdtaxirqfozfvjhg.supabase.co"]
+    associatedDomains: [
+      "applinks:auth.medico-app.com", 
+      "applinks:cslxbdtaxirqfozfvjhg.supabase.co",
+      "webcredentials:cslxbdtaxirqfozfvjhg.supabase.co"
+    ]
   },
   android: {
     adaptiveIcon: {
@@ -41,9 +45,24 @@ export default {
             pathPrefix: "/auth/v1/callback"
           },
           {
+            scheme: "https",
+            host: "cslxbdtaxirqfozfvjhg.supabase.co",
+            pathPrefix: "/auth/v1/verify"
+          },
+          {
             scheme: "medico",
             host: "auth",
             pathPrefix: "/callback"
+          },
+          {
+            scheme: "medico",
+            host: "auth",
+            pathPrefix: "/reset-password"
+          },
+          {
+            scheme: "medico",
+            host: "password-actions",
+            pathPrefix: "/reset"
           }
         ],
         category: ["BROWSABLE", "DEFAULT"]
@@ -56,7 +75,8 @@ export default {
     favicon: './assets/images/favicon.png'
   },
   plugins: [
-    'expo-router'
+    'expo-router',
+    'expo-secure-store'
   ],
   experiments: {
     typedRoutes: true,

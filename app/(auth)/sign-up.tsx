@@ -68,7 +68,7 @@ export default function SignUp() {
   const circlePulse1 = useRef(new Animated.Value(1)).current;
   const circlePulse2 = useRef(new Animated.Value(1)).current;
   const circleOpacity1 = useRef(new Animated.Value(0.3)).current;
-  const circleOpacity2 = useRef(new Animated.Value(0.2)).current;
+  const circleOpacity2 = useRef(new Animated.Value(0.4)).current;
   
   // Logo animations
   const heartScale = useRef(new Animated.Value(1)).current;
@@ -201,68 +201,68 @@ export default function SignUp() {
     ]).start();
 
     // Background animations
-    Animated.loop(
+    const pulseAnimation1 = () => {
       Animated.sequence([
         Animated.parallel([
-          Animated.timing(circlePulse1, {
-            toValue: 1.3,
-            duration: 8000,
-            useNativeDriver: true,
-            easing: Easing.inOut(Easing.sin),
-          }),
           Animated.timing(circleOpacity1, {
-            toValue: 0.1,
-            duration: 8000,
-            useNativeDriver: true,
+            toValue: 0.5,
+            duration: 2000,
+            useNativeDriver: false
           }),
+          Animated.timing(circlePulse1, {
+            toValue: 1.1,
+            duration: 2000,
+            useNativeDriver: false
+          })
         ]),
         Animated.parallel([
-          Animated.timing(circlePulse1, {
-            toValue: 1,
-            duration: 8000,
-            useNativeDriver: true,
-            easing: Easing.inOut(Easing.sin),
-          }),
           Animated.timing(circleOpacity1, {
             toValue: 0.3,
-            duration: 8000,
-            useNativeDriver: true,
+            duration: 2000,
+            useNativeDriver: false
           }),
-        ]),
-      ])
-    ).start();
+          Animated.timing(circlePulse1, {
+            toValue: 1,
+            duration: 2000,
+            useNativeDriver: false
+          })
+        ])
+      ]).start(() => pulseAnimation1());
+    };
 
-    Animated.loop(
+    const pulseAnimation2 = () => {
       Animated.sequence([
         Animated.parallel([
-          Animated.timing(circlePulse2, {
-            toValue: 1.5,
-            duration: 10000,
-            useNativeDriver: true,
-            easing: Easing.inOut(Easing.sin),
-          }),
           Animated.timing(circleOpacity2, {
-            toValue: 0.1,
-            duration: 10000,
-            useNativeDriver: true,
+            toValue: 0.6,
+            duration: 2500,
+            useNativeDriver: false
           }),
+          Animated.timing(circlePulse2, {
+            toValue: 1.15,
+            duration: 2500,
+            useNativeDriver: false
+          })
         ]),
         Animated.parallel([
+          Animated.timing(circleOpacity2, {
+            toValue: 0.4,
+            duration: 2500,
+            useNativeDriver: false
+          }),
           Animated.timing(circlePulse2, {
             toValue: 1,
-            duration: 10000,
-            useNativeDriver: true,
-            easing: Easing.inOut(Easing.sin),
-          }),
-          Animated.timing(circleOpacity2, {
-            toValue: 0.2,
-            duration: 10000,
-            useNativeDriver: true,
-          }),
-        ]),
-      ])
-    ).start();
-    
+            duration: 2500,
+            useNativeDriver: false
+          })
+        ])
+      ]).start(() => pulseAnimation2());
+    };
+
+    pulseAnimation1();
+    // Start second animation with a delay
+    setTimeout(() => pulseAnimation2(), 1000);
+
     // Heartbeat animation
     Animated.loop(
       Animated.sequence([
@@ -299,6 +299,13 @@ export default function SignUp() {
         }),
       ])
     ).start();
+
+    return () => {
+      circleOpacity1.stopAnimation();
+      circlePulse1.stopAnimation();
+      circleOpacity2.stopAnimation();
+      circlePulse2.stopAnimation();
+    };
   }, []);
 
   const stethoscopeRotate = stethoscopeRotation.interpolate({
@@ -361,22 +368,36 @@ export default function SignUp() {
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
       
+      {/* Animated gradient background */}
       <LinearGradient
-        colors={['#0A101F', '#121828', '#1A2236']}
-        locations={[0, 0.4, 1]}
-        style={styles.headerBackground}
-      />
-
-      {/* Back Button */}
-      <TouchableOpacity
-        style={styles.backButton}
-        onPress={navigateBack}
+        colors={['#05103b', '#062766', '#0a47a1']}
+        locations={[0, 0.5, 1]}
+        style={styles.backgroundGradient}
       >
-        <ArrowLeft size={24} color="#6EBDFF" />
-      </TouchableOpacity>
-
-      <ScrollView 
+        {/* Animated background circles */}
+        <Animated.View 
+          style={[
+            styles.circle1,
+            {
+              opacity: circleOpacity1,
+              transform: [{ scale: circlePulse1 }],
+            }
+          ]}
+        />
+        <Animated.View 
+          style={[
+            styles.circle2,
+            {
+              opacity: circleOpacity2,
+              transform: [{ scale: circlePulse2 }],
+            }
+          ]}
+        />
+      </LinearGradient>
+      
+      <ScrollView
         contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         <KeyboardAvoidingView 
@@ -729,14 +750,6 @@ export default function SignUp() {
           </View>
         </KeyboardAvoidingView>
       </ScrollView>
-
-      {/* Medical pattern overlay */}
-      <View style={styles.backgroundContent}>
-        <View style={styles.patternCircle} />
-        <View style={styles.patternSquare} />
-        <View style={[styles.patternDot, styles.patternDot2]} />
-        <View style={[styles.patternCircle, styles.patternCircle2]} />
-      </View>
     </SafeAreaView>
   );
 }
@@ -744,7 +757,9 @@ export default function SignUp() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121828',
+    backgroundColor: '#1A202C',
+    padding: 20,
+    overflow: 'hidden',
   },
   headerBackground: {
     position: 'absolute',
@@ -834,7 +849,7 @@ const styles = StyleSheet.create({
   },
   formSection: {
     width: '100%',
-    backgroundColor: '#1A2236',
+    backgroundColor: 'rgba(10, 20, 50, 0.7)',
     borderRadius: 16,
     padding: 28,
     marginTop: 20,
@@ -848,7 +863,7 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
     zIndex: 1,
     borderWidth: 1,
-    borderColor: '#2A3246',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   welcomeText: {
     fontSize: 28,
@@ -859,7 +874,7 @@ const styles = StyleSheet.create({
   welcomeSubtext: {
     fontSize: 16,
     fontFamily: 'Inter_400Regular',
-    color: '#A0AEC0',
+    color: 'rgba(255,255,255,0.75)',
     marginBottom: 28,
   },
   inputGroup: {
@@ -869,7 +884,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 15,
     fontFamily: 'Inter_500Medium',
-    color: '#FFFFFF',
+    color: 'rgba(255,255,255,0.9)',
     marginBottom: 8,
   },
   inputContainer: {
@@ -877,10 +892,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
     height: 56,
-    backgroundColor: '#232B3E',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#2A3246',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
     paddingHorizontal: 16,
   },
   inputIcon: {
@@ -961,13 +976,13 @@ const styles = StyleSheet.create({
   signInText: {
     fontSize: 15,
     fontFamily: 'Inter_400Regular',
-    color: '#A0AEC0',
+    color: 'rgba(255,255,255,0.75)',
     marginRight: 4,
   },
   signInLink: {
     fontSize: 15,
     fontFamily: 'Inter_600SemiBold',
-    color: '#6EBDFF',
+    color: '#0091FF',
   },
   backgroundContent: {
     position: 'absolute',
@@ -979,62 +994,31 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     pointerEvents: 'none',
   },
-  patternDot: {
+  circle1: {
     position: 'absolute',
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#0070F3',
-    opacity: 0.2,
-    top: height * 0.15,
-    right: 20,
+    width: 500,
+    height: 500,
+    borderRadius: 250,
+    backgroundColor: '#2D3748',
+    top: -100,
+    right: -150,
   },
-  patternDot2: {
-    top: height * 0.85,
-    left: 30,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-  },
-  patternCircle: {
+  circle2: {
     position: 'absolute',
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 10,
-    borderColor: 'rgba(0, 112, 243, 0.08)',
-    top: height * 0.25,
-    left: -30,
+    width: 400,
+    height: 400,
+    borderRadius: 200,
+    backgroundColor: '#2D3748',
+    bottom: -100,
+    left: -100,
   },
-  patternCircle2: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    top: height * 0.65,
-    right: -40,
-  },
-  patternSquare: {
+  backgroundGradient: {
     position: 'absolute',
-    width: 40,
-    height: 40,
-    transform: [{ rotate: '45deg' }],
-    backgroundColor: 'rgba(0, 145, 255, 0.08)',
-    bottom: height * 0.3,
-    right: 40,
-  },
-  backButton: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 20,
-    left: 20,
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: 'rgba(26, 34, 54, 0.7)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 10,
-    borderWidth: 1,
-    borderColor: '#2A3246',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: -1,
   },
   formCard: {
     borderRadius: 24,

@@ -51,7 +51,7 @@ export default function SignUp() {
 
     // Auto-prefix 'Dr.' if not already present
     let formattedName = fullName.trim();
-    if (!formattedName.startsWith('Dr.') && !formattedName.startsWith('dr.')) {
+    if (!formattedName.startsWith('Dr.') && !formattedName.startsWith('dr.') && !formattedName.startsWith('Dr ') && !formattedName.startsWith('dr ')) {
       formattedName = `Dr. ${formattedName}`;
     }
 

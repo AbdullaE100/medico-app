@@ -1,9 +1,25 @@
 import { create } from 'zustand';
-import { supabase, handleAuthRedirect, ensureOAuthState, prepareBrowserForAuth } from '@/lib/supabase';
+import { 
+  supabase, 
+  handleAuthRedirect, 
+  ensureOAuthState, 
+  prepareBrowserForAuth, 
+  createAndStoreOAuthState, 
+  clearStoredOAuthState, 
+  handlePKCEFlowStateError, 
+  extractAuthCode, 
+  preflightOAuthConnection, 
+  getStoredOAuthState, 
+  manuallyExchangeCodeForSession,
+  generateAndStorePKCE,
+  directTokenExchange
+} from '@/lib/supabase';
 import { sessionManager } from '@/lib/sessionManager';
 import { User } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
 export interface Profile {
   id: string;
@@ -45,6 +61,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (sessionError) throw sessionError;
       
       if (!session) {
+        console.log("checkAuth: No active session found, setting isAuthenticated to false");
         set({ isAuthenticated: false, isLoading: false, error: null, currentUser: null });
         return;
       }
@@ -53,8 +70,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const { data: { user }, error: userError } = await sessionManager.getUser();
       if (userError) throw userError;
       
+      const isAuth = !!user;
+      console.log("checkAuth: Session found, setting isAuthenticated to", isAuth);
+      
       set({ 
-        isAuthenticated: !!user, 
+        isAuthenticated: isAuth, 
         currentUser: user || null,
         isLoading: false, 
         error: null 
@@ -215,17 +235,103 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   signOut: async () => {
     set({ isLoading: true, error: null });
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      console.log("useAuthStore: Signing out user");
+      
+      // First, clear any stored navigation or auth flags
+      await AsyncStorage.removeItem('medico-auth-success');
+      await AsyncStorage.removeItem('medico-auth-user-id');
+      await AsyncStorage.removeItem('medico-force-navigation');
+      await AsyncStorage.removeItem('medico-force-navigation-timestamp');
+      
+      // Try to sign out with Supabase
+      const { error } = await supabase.auth.signOut({ scope: 'global' });
+      if (error) {
+        console.error("useAuthStore: Error during sign out:", error.message);
+        throw error;
+      }
+      
+      console.log("useAuthStore: Successfully signed out from Supabase");
+      
+      // Clear state in the store
       set({ 
         isAuthenticated: false, 
         currentUser: null,
         profile: null,
         error: null 
       });
+      
+      // Clean up any lingering auth tokens or state
+      try {
+        // Clear any auth-related items from AsyncStorage
+        const keys = await AsyncStorage.getAllKeys();
+        const authKeys = keys.filter(key => 
+          key.includes('supabase') || 
+          key.includes('token') || 
+          key.includes('auth') || 
+          key.includes('session') ||
+          key.includes('oauth')
+        );
+        
+        if (authKeys.length > 0) {
+          console.log("useAuthStore: Cleaning up auth storage keys:", authKeys.length);
+          await AsyncStorage.multiRemove(authKeys);
+        }
+      } catch (storageError) {
+        console.error("useAuthStore: Error cleaning storage during signout:", storageError);
+        // Continue despite storage cleaning errors
+      }
+      
+      // Force navigation to sign-in screen
+      try {
+        console.log("useAuthStore: Setting up forced navigation to sign-in after signout");
+        
+        // Store target for forced navigation
+        await AsyncStorage.setItem('medico-force-navigation', '/(auth)/sign-in');
+        await AsyncStorage.setItem('medico-force-navigation-timestamp', Date.now().toString());
+        
+        // Method 1: Try router navigate
+        try {
+          const { router } = require('expo-router');
+          console.log("useAuthStore: Directly navigating to sign-in after signout");
+          
+          // Multiple attempts with different timing
+          setTimeout(() => router.replace('/(auth)/sign-in'), 300);
+          setTimeout(() => router.replace('/(auth)/sign-in'), 800);
+        } catch (routerError) {
+          console.error("useAuthStore: Router navigation failed during signout:", routerError);
+        }
+        
+        // Method 2: Try Linking API
+        try {
+          const Linking = require('expo-linking');
+          setTimeout(() => {
+            try {
+              const url = Linking.createURL('/(auth)/sign-in');
+              console.log("useAuthStore: Opening sign-in URL:", url);
+              Linking.openURL(url);
+            } catch (err) {
+              console.error("useAuthStore: Error using Linking API during signout:", err);
+            }
+          }, 500);
+        } catch (linkError) {
+          console.error("useAuthStore: Linking import failed during signout:", linkError);
+        }
+      } catch (navError) {
+        console.error("useAuthStore: Navigation error during signout:", navError);
+      }
+      
+      console.log("useAuthStore: Sign out process completed");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to sign out. Please try again.';
+      console.error("useAuthStore: Sign out error:", errorMessage);
       set({ error: errorMessage });
+      
+      // Even if there's an error, try to force reset the auth state
+      set({ 
+        isAuthenticated: false, 
+        currentUser: null,
+        profile: null
+      });
     } finally {
       set({ isLoading: false });
     }
@@ -234,133 +340,391 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   signInWithGoogle: async () => {
     set({ isLoading: true, error: null });
     try {
-      console.log("useAuthStore: Attempting to sign in with Google...");
+      console.log("useAuthStore: Starting Google sign-in with enhanced PKCE flow");
       
-      // Prepare browser for authentication by clearing sessions
+      // Temporarily disable AuthRedirector to prevent navigation conflicts
+      await AsyncStorage.setItem('medico-disable-redirector', 'true');
+      
+      // Step 1: Thorough cleanup using optimized function
       await prepareBrowserForAuth();
       
-      // Generate a more secure random state parameter
-      const randomBytes = new Uint8Array(16);
-      for (let i = 0; i < 16; i++) {
-        randomBytes[i] = Math.floor(Math.random() * 256);
-      }
-      const state = Array.from(randomBytes)
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
+      // Step 2: Generate our own PKCE parameters with multi-location storage
+      const { codeVerifier, codeChallenge } = await generateAndStorePKCE();
+      console.log("useAuthStore: Generated PKCE parameters");
       
-      // Store the state in global variable
-      global._oauthState = state;
-      console.log("useAuthStore: Generated OAuth state:", state.substring(0, 6) + '...');
+      // Critical: Store code verifier in multiple places to ensure it survives the redirect
+      await AsyncStorage.setItem('supabase.auth.token.code_verifier', codeVerifier);
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('supabase.auth.token.code_verifier', codeVerifier);
+        }
+      } catch (e) { /* ignore */ }
       
-      // Define all possible redirect URLs
-      const redirectUrls = {
-        ios: 'medico-app://auth/callback',
-        android: 'exp://192.168.1.109:8090/--/auth/callback',
-        web: 'https://cslxbdtaxirqfozfvjhg.supabase.co/auth/v1/callback',
-        expo: 'exp://localhost:8089/--/auth/callback'
-      };
+      try {
+        await SecureStore.setItemAsync('supabase.auth.token.code_verifier', codeVerifier);
+      } catch (e) { /* ignore */ }
       
-      // Select the appropriate redirect URL based on platform
-      const redirectUrl = Platform.select({
-        ios: redirectUrls.ios,
-        android: redirectUrls.android,
-        web: redirectUrls.web,
-        default: redirectUrls.expo
-      });
+      // Also store it in the Supabase client's PKCE expected location
+      await AsyncStorage.setItem('medico-supabase-auth-code-verifier', codeVerifier);
       
+      // Step 3: Generate auth URL with the consistent redirect
+      const redirectUrl = 'medico://auth/callback';
       console.log("useAuthStore: Using redirect URL:", redirectUrl);
       
-      // Initiate the OAuth flow with Supabase
+      // Step 4: Generate OAuth URL with our custom parameters
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: redirectUrl,
+          skipBrowserRedirect: true, // We handle the redirect manually
           queryParams: {
+            // Request offline access for refresh token
             access_type: 'offline',
             prompt: 'consent',
-            state: state, // Pass the state parameter directly to Supabase
+            // Add our code challenge (not usually needed but adds robustness)
+            code_challenge: codeChallenge,
+            code_challenge_method: 'plain', // Simplified for compatibility
           },
-          scopes: 'email profile',
-          skipBrowserRedirect: true, // Important for mobile flow
         }
       });
       
-      if (error) throw error;
-      
-      if (!data?.url) {
-        throw new Error('No authentication URL returned from Supabase');
+      if (error) {
+        console.error("useAuthStore: OAuth initialization error:", error.message);
+        throw error;
       }
       
-      console.log("useAuthStore: OAuth URL received, length:", data.url.length);
+      if (!data?.url) {
+        console.error("useAuthStore: No authorization URL returned");
+        throw new Error("Failed to generate authorization URL");
+      }
       
-      // Ensure the URL has our state parameter
-      const authUrl = ensureOAuthState(data.url, state);
+      console.log("useAuthStore: Opening OAuth URL in browser");
       
-      console.log("useAuthStore: Opening auth session in browser...");
-      
-      // Clear any existing sessions
-      await WebBrowser.maybeCompleteAuthSession();
-      
-      // Open the authentication URL in a browser
+      // Step 5: Use WebBrowser with proper warm up
+      await WebBrowser.warmUpAsync();
       const result = await WebBrowser.openAuthSessionAsync(
-        authUrl,
+        data.url,
         redirectUrl,
         {
+          preferEphemeralSession: false,
           showInRecents: true,
-          createTask: true,
+          createTask: true
         }
       );
       
-      console.log("useAuthStore: Browser auth result type:", result.type);
+      console.log("useAuthStore: Browser session result type:", result.type);
       
       if (result.type === 'success' && result.url) {
-        console.log("useAuthStore: Auth redirect successful, processing URL");
+        console.log("useAuthStore: Received redirect URL:", result.url);
+        
+        // Allow a small delay before processing the URL
+        await new Promise(resolve => setTimeout(resolve, 300));
         
         try {
-          // Handle the redirect URL
-          const authSuccess = await handleAuthRedirect(result.url);
+          // Extract the code for manual handling if needed
+          const code = extractAuthCode(result.url);
+          if (!code) {
+            console.error("useAuthStore: No authorization code found in URL");
+            throw new Error("No authorization code found in URL");
+          }
           
-          if (authSuccess) {
-            console.log("useAuthStore: OAuth authentication successful");
+          // Step 6: Multi-strategy auth flow
+          
+          // Strategy 1: Try handleAuthRedirect first (original approach)
+          console.log("useAuthStore: Attempting standard code exchange");
+          const redirectSuccess = await handleAuthRedirect(result.url);
+          
+          if (redirectSuccess) {
+            console.log("useAuthStore: Standard code exchange successful");
+            const { data: userData } = await supabase.auth.getUser();
             
-            // Fetch fresh user data
-            const { data: { user }, error: userError } = await sessionManager.getUser();
-            if (userError) throw userError;
-            
-            if (user) {
-              console.log("useAuthStore: User authenticated:", user.id);
+            // Ensure authentication state is properly set
+            if (userData?.user) {
+              console.log("useAuthStore: Setting authenticated state with user:", userData.user.id);
+              
+              // Force successful auth to be stored in AsyncStorage for app to detect
+              await AsyncStorage.setItem('medico-auth-success', 'true');
+              await AsyncStorage.setItem('medico-auth-user-id', userData.user.id);
+              
+              // First set the auth state
               set({ 
                 isAuthenticated: true, 
-                currentUser: user,
-                error: null
+                currentUser: userData.user,
+                error: null,
+                isLoading: false // Make sure to set isLoading to false
               });
               
-              // Load profile data
+              // Force a session refresh to ensure it's recognized across the app
+              await supabase.auth.refreshSession();
+              
               await get().loadProfile();
               
+              // Use a more aggressive approach to navigation
+              try {
+                // Store redirection target in AsyncStorage for _layout to pick up
+                await AsyncStorage.setItem('medico-force-navigation', '/(tabs)');
+                await AsyncStorage.setItem('medico-force-navigation-timestamp', Date.now().toString());
+                
+                // Use multiple navigation approaches to ensure one works
+                // 1. Direct require of expo-router
+                try {
+                  const { router } = require('expo-router');
+                  console.log("useAuthStore: Directly navigating to home screen via require");
+                  
+                  // Use multiple delays to try to hit the right timing window
+                  setTimeout(() => router.replace('/(tabs)'), 300);
+                  setTimeout(() => router.replace('/(tabs)'), 800);
+                  setTimeout(() => router.replace('/(tabs)'), 1500);
+                } catch (navError) {
+                  console.error("useAuthStore: Navigation via require failed:", navError);
+                }
+                
+                // 2. Also try the Linking API as a backup
+                try {
+                  const Linking = require('expo-linking');
+                  console.log("useAuthStore: Trying navigation via Linking API");
+                  setTimeout(() => {
+                    try {
+                      // Create the URL for the app's internal route
+                      const url = Linking.createURL('/(tabs)');
+                      console.log("useAuthStore: Opening internal URL:", url);
+                      // Open the URL in the app
+                      Linking.openURL(url);
+                    } catch (err) {
+                      console.error("useAuthStore: Error using Linking API:", err);
+                    }
+                  }, 1000);
+                } catch (linkError) {
+                  console.error("useAuthStore: Linking navigation failed:", linkError);
+                }
+                
+              } catch (navError) {
+                console.error("useAuthStore: All navigation attempts failed:", navError);
+              }
+              
+              // Notify that we've been authenticated
+              console.log("useAuthStore: Authentication complete, isAuthenticated =", true);
+              
               return true;
-            } else {
-              throw new Error('No user returned after successful authentication');
             }
-          } else {
-            console.error("useAuthStore: Auth redirect processed but no success");
-            throw new Error('Authentication redirect failed');
           }
-        } catch (redirectError) {
-          console.error("useAuthStore: Error handling redirect:", redirectError);
-          throw redirectError;
+          
+          // Strategy 2: Direct token exchange with our stored verifier
+          console.log("useAuthStore: Standard exchange failed, trying direct token exchange");
+          const directSuccess = await directTokenExchange(code, codeVerifier);
+          
+          if (directSuccess) {
+            console.log("useAuthStore: Direct token exchange successful");
+            // Trigger a session refresh in the client
+            await supabase.auth.refreshSession();
+            
+            const { data: userData } = await supabase.auth.getUser();
+            set({ 
+              isAuthenticated: true, 
+              currentUser: userData.user,
+              error: null,
+              isLoading: false
+            });
+            
+            await get().loadProfile();
+            
+            // Update AsyncStorage for forced navigation fallback
+            await AsyncStorage.setItem('medico-auth-success', 'true');
+            await AsyncStorage.setItem('medico-force-navigation', '/(tabs)');
+            await AsyncStorage.setItem('medico-force-navigation-timestamp', Date.now().toString());
+            
+            // Directly navigate to home screen
+            try {
+              // Method 1: Try router navigate
+              try {
+                const { router } = require('expo-router');
+                console.log("useAuthStore: Directly navigating to home screen after direct token exchange");
+                setTimeout(() => {
+                  router.replace('/(tabs)');
+                }, 500);
+              } catch (routerError) {
+                console.error("useAuthStore: Router navigation failed:", routerError);
+              }
+              
+              // Method 2: Try Linking API
+              try {
+                const Linking = require('expo-linking');
+                setTimeout(() => {
+                  try {
+                    const url = Linking.createURL('/(tabs)');
+                    console.log("useAuthStore: Opening internal URL:", url);
+                    Linking.openURL(url);
+                  } catch (err) {
+                    console.error("useAuthStore: Error using Linking API:", err);
+                  }
+                }, 1000);
+              } catch (linkError) {
+                console.error("useAuthStore: Linking import failed:", linkError);
+              }
+            } catch (navError) {
+              console.error("useAuthStore: Navigation error:", navError);
+            }
+            
+            return true;
+          }
+          
+          // Strategy 3: Advanced PKCE flow error recovery
+          console.log("useAuthStore: Direct exchange failed, using advanced recovery");
+          const recoverySuccess = await handlePKCEFlowStateError(code);
+          
+          if (recoverySuccess) {
+            console.log("useAuthStore: Recovery successful");
+            const { data: userData } = await supabase.auth.getUser();
+            
+            set({ 
+              isAuthenticated: true, 
+              currentUser: userData.user,
+              error: null,
+              isLoading: false
+            });
+            
+            await get().loadProfile();
+            
+            // Update AsyncStorage for forced navigation fallback
+            await AsyncStorage.setItem('medico-auth-success', 'true');
+            await AsyncStorage.setItem('medico-force-navigation', '/(tabs)');
+            await AsyncStorage.setItem('medico-force-navigation-timestamp', Date.now().toString());
+            
+            // Directly navigate to home screen
+            try {
+              // Method 1: Try router navigate
+              try {
+                const { router } = require('expo-router');
+                console.log("useAuthStore: Directly navigating to home screen after recovery");
+                setTimeout(() => {
+                  router.replace('/(tabs)');
+                }, 500);
+              } catch (routerError) {
+                console.error("useAuthStore: Router navigation failed:", routerError);
+              }
+              
+              // Method 2: Try Linking API
+              try {
+                const Linking = require('expo-linking');
+                setTimeout(() => {
+                  try {
+                    const url = Linking.createURL('/(tabs)');
+                    console.log("useAuthStore: Opening internal URL:", url);
+                    Linking.openURL(url);
+                  } catch (err) {
+                    console.error("useAuthStore: Error using Linking API:", err);
+                  }
+                }, 1000);
+              } catch (linkError) {
+                console.error("useAuthStore: Linking import failed:", linkError);
+              }
+            } catch (navError) {
+              console.error("useAuthStore: Navigation error:", navError);
+            }
+            
+            return true;
+          }
+          
+          // If all strategies failed, throw an error
+          throw new Error("All authentication strategies failed");
+        } catch (exchangeError) {
+          console.error("useAuthStore: Error during authentication:", 
+            exchangeError instanceof Error ? exchangeError.message : exchangeError);
+          
+          // Last resort - check if we got authenticated anyway
+          const { data: finalCheckSession } = await supabase.auth.getSession();
+          if (finalCheckSession && finalCheckSession.session) {
+            console.log("useAuthStore: Found session in final check");
+            const { data: userData } = await supabase.auth.getUser();
+            if (userData && userData.user) {
+          set({ 
+            isAuthenticated: true, 
+            currentUser: userData.user,
+                error: null,
+                isLoading: false
+              });
+              await get().loadProfile();
+              
+              // Update AsyncStorage for forced navigation fallback
+              await AsyncStorage.setItem('medico-auth-success', 'true');
+              await AsyncStorage.setItem('medico-force-navigation', '/(tabs)');
+              await AsyncStorage.setItem('medico-force-navigation-timestamp', Date.now().toString());
+              
+              // Directly navigate to home screen as a last resort
+              try {
+                // Method 1: Try router navigate
+                try {
+                  const { router } = require('expo-router');
+                  console.log("useAuthStore: Directly navigating to home screen after final session check");
+                  setTimeout(() => {
+                    router.replace('/(tabs)');
+                  }, 500);
+                } catch (routerError) {
+                  console.error("useAuthStore: Router navigation failed:", routerError);
+                }
+                
+                // Method 2: Try Linking API
+                try {
+                  const Linking = require('expo-linking');
+                  setTimeout(() => {
+                    try {
+                      const url = Linking.createURL('/(tabs)');
+                      console.log("useAuthStore: Opening internal URL:", url);
+                      Linking.openURL(url);
+                    } catch (err) {
+                      console.error("useAuthStore: Error using Linking API:", err);
+                    }
+                  }, 1000);
+                } catch (linkError) {
+                  console.error("useAuthStore: Linking import failed:", linkError);
+                }
+              } catch (navError) {
+                console.error("useAuthStore: Navigation error:", navError);
+              }
+              
+              return true;
+            }
+          }
+          
+          throw exchangeError;
         }
       } else if (result.type === 'cancel') {
-        console.log("useAuthStore: Auth session was cancelled by user");
-        throw new Error('Authentication was cancelled by the user');
+        console.log("useAuthStore: User cancelled the authentication");
+        throw new Error('Authentication was cancelled');
       } else {
-        console.error("useAuthStore: Unexpected auth result type:", result.type);
-        throw new Error('Authentication failed with unexpected result');
+        console.error("useAuthStore: Unexpected browser result type:", result.type);
+        throw new Error(`Authentication failed with unexpected result: ${result.type}`);
+      }
+    } catch (error) {
+      let errorMessage = 'Failed to sign in with Google';
+      
+      if (error instanceof Error) {
+        errorMessage += `: ${error.message}`;
+        console.error("useAuthStore: Google sign-in error:", error.message);
+      } else {
+        console.error("useAuthStore: Google sign-in error (unknown):", error);
       }
       
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to sign in with Google. Please try again.';
-      console.error("useAuthStore: Google sign in error:", errorMessage);
+      // Double-check if we're actually authenticated despite errors
+      try {
+        const { data: finalSession } = await supabase.auth.getSession();
+        if (finalSession.session) {
+          console.log("useAuthStore: Found valid session despite errors, authentication successful");
+          const { data: user } = await supabase.auth.getUser();
+          if (user) {
+            set({ 
+              isAuthenticated: true, 
+              currentUser: user.user,
+              error: null
+            });
+            await get().loadProfile();
+            return true;
+          }
+        }
+      } catch (finalCheckError) {
+        // Ignore errors in final check
+      }
+      
       set({ 
         error: errorMessage, 
         isAuthenticated: false,
@@ -369,6 +733,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return false;
     } finally {
       set({ isLoading: false });
+      // Re-enable AuthRedirector
+      await AsyncStorage.removeItem('medico-disable-redirector');
     }
   },
 }));
+
+/**
+ * Store OAuth state parameter securely if not already imported
+ */
+const storeOAuthState = async (state: string): Promise<void> => {
+  try {
+    // Store in both AsyncStorage (for redundancy) and global variable
+    await AsyncStorage.setItem('medico-oauth-state', state);
+    global._oauthState = state;
+    console.log("OAuth state stored:", state.substring(0, 5) + '...');
+  } catch (error) {
+    console.error("Error storing OAuth state:", error);
+  }
+};

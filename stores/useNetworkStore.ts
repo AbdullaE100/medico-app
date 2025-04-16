@@ -246,19 +246,26 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
         
         if (rpcFailed || rpcError) {
           console.log('RPC function not available, using direct insert');
-          // Insert only the follow relationship where the current user is the follower
+          // Identify the other user
           const otherUserId = user.id === request.sender_id ? request.receiver_id : request.sender_id;
           
+          // Use upsert rather than insert to avoid violating the unique constraint
           const { error: followError } = await supabase
             .from('doctor_follows')
-            .insert({ 
+            .upsert({ 
               follower_id: user.id,
               following_id: otherUserId
-            });
+            },
+            { onConflict: 'follower_id,following_id', ignoreDuplicates: true });
             
-          if (followError) {
-            console.error('Error creating follow relationship:', followError);
-          }
+            if (followError) {
+              // Check if it's a duplicate key error (which means the relationship already exists)
+              if (followError.code === '23505') {
+                console.log('Follow relationship already exists, treating as success');
+              } else {
+                console.error('Error creating follow relationship:', followError);
+              }
+            }
         }
       } catch (followErr) {
         // Catch but don't throw - we still want to show the request as accepted

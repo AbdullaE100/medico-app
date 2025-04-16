@@ -284,8 +284,13 @@ export default function SignIn() {
       
       if (success) {
         statusUpdateCallback("Authentication successful! Redirecting...");
+        // Instead of redirecting to /home, let auth/callback handle the redirection
+        // This ensures the proper OAuth flow through our callback which will
+        // check if the user needs to complete onboarding
         setTimeout(() => {
-          router.replace('/home');
+          // We don't replace the route here - let the callback handle it
+          // The callback will check if profile is complete and route accordingly
+          console.log("Google sign-in successful, awaiting callback redirection");
         }, 500);
       } else {
         console.warn("Google sign-in returned false without throwing an error");
@@ -478,7 +483,10 @@ export default function SignIn() {
                     </View>
                   </View>
                   
-                  <TouchableOpacity style={styles.forgotPassword}>
+                  <TouchableOpacity 
+                    style={styles.forgotPassword}
+                    onPress={() => router.push('/(auth)/forgot-password')}
+                  >
                     <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
                   </TouchableOpacity>
                 </View>
@@ -536,7 +544,10 @@ export default function SignIn() {
                     </View>
                   </View>
                   
-                  <TouchableOpacity style={styles.forgotPassword}>
+                  <TouchableOpacity 
+                    style={styles.forgotPassword}
+                    onPress={() => router.push('/(auth)/forgot-password')}
+                  >
                     <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
                   </TouchableOpacity>
                 </View>
